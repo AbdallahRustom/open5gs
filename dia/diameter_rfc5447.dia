@@ -23,6 +23,7 @@
 ;;
 
 @id 1
+@name diameter_rfc5447
 
 @inherits diameter_gen_base_rfc6733
 @inherits diameter_rfc4004
