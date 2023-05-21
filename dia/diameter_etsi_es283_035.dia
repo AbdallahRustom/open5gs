@@ -1,0 +1,75 @@
+;;
+;; %CopyrightBegin%
+;;
+;; Copyright (C) 2023 by sysmocom - s.m.f.c. GmbH <info@sysmocom.de>
+;; Author: Alexander Couzens <lynxis@fe80.eu>
+;;
+;; This resembles 3GPP TS 29.273 version 15.4.0 Release 15
+;;
+;; Licensed under the Apache License, Version 2.0 (the "License");
+;; you may not use this file except in compliance with the License.
+;; You may obtain a copy of the License at
+;;
+;;     http://www.apache.org/licenses/LICENSE-2.0
+;;
+;; Unless required by applicable law or agreed to in writing, software
+;; distributed under the License is distributed on an "AS IS" BASIS,
+;; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+;; See the License for the specific language governing permissions and
+;; limitations under the License.
+;;
+;; %CopyrightEnd%
+;;
+
+@id     16777231
+@name   diameter_etsi_es283_035
+@prefix diameter_e4
+@vendor 13019 ETSI
+
+@inherits diameter_gen_base_rfc6733
+
+;; only attributes required by other applications are defined
+
+@avp_types
+
+	Location-Information		350		Grouped				V		;; 7.3.1
+	Policy-Control-Contact-Point	351		DiameterIdentity		V		;; 7.3.2
+	Terminal-Type			352		OctetString			V		;; 7.3.3
+	Requested-Information		353		Enumerated			V		;; 7.3.4
+	Event-Type			354		Enumerated			V		;; 7.3.6
+	Line-Identifier			500		OctetString			V		;; 7.3.5
+	Civic-Location			355		OctetString			V		;; 7.3.1.A
+	Geospatial-Location		356		OctetString			V		;; 7.3.1.B
+
+@grouped
+;; 7.3.1
+	Location-Information ::= < AVP Header: 350 13019 >
+		[Line-Identifier]
+		[Civic-Location]
+		[Geospatial-Location]
+		*[AVP]
+
+;; 7.3.4
+@enum Requested-Information
+		IP-CONNECTIVITY-USER-ID			0
+		LOCATION-INFORMATION			1
+		POLICY-CONTROL-CONTACT-POINT		2
+		ACCESS-NETWORK-TYPE			3
+		TERMINAL-TYPE				4
+		LOGICAL-ACCESS-ID			5
+		PHYSICAL-ACCESS-ID			6
+
+;; 7.3.6
+@enum Event-Type
+	USER-LOGON				0
+	LOCATION-INFORMATION-CHANGED		1
+	POLICY-CONTROL-CONTACT-POINT-CHANGED	2
+	ACCESS-NETWORK-TYPE-CHANGED		3
+	TERMINAL-TYPE-CHANGED			4
+	LOGICAL-ACCESS-ID-CHANGED		5
+	PHYSICAL-ACCESS-ID-CHANGED		6
+	IP-ADDRESS-CHANGED			7
+	INITIAL-GATE-SETTING-CHANGED		8
+	QOS-PROFILE-CHANGED			9
+	USER-LOGOFF				10
+

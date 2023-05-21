@@ -32,9 +32,17 @@
 @vendor 10415 3GPP
 
 @inherits diameter_gen_base_rfc6733
+@inherits diameter_3gpp_base
+@inherits diameter_3gpp_break_circles
+@inherits diameter_3gpp_ts29_212
+@inherits diameter_3gpp_ts29_272
 @inherits diameter_3gpp_ts32_299
+@inherits diameter_etsi_es283_034
+@inherits diameter_rfc4006_cc
 @inherits diameter_rfc5580
 @inherits diameter_rfc5778
+@inherits diameter_rfc7683
+@inherits diameter_rfc7944
 
 @avp_types
 	MIP6-Feature-Vector				124		Unsigned64			M		;; 5.2.3.3
@@ -115,7 +123,7 @@ TWAN-Connectivity-Parameters ::= < AVP Header: 1528 10415 >
 
 ;; 8.2.3.1
 Non-3GPP-User-Data ::= < AVP Header: 1500 10415 >
-	[ Subscription-ID ]
+	[ Subscription-Id ]
 	[ Non-3GPP-IP-Access ]
 	[ Non-3GPP-IP-Access-APN ]
 	*[ RAT-Type ]

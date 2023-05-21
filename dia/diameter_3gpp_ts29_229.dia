@@ -24,6 +24,8 @@
 @vendor 10415 3GPP
 
 @inherits diameter_gen_base_rfc6733
+@inherits diameter_etsi_es283_035
+@inherits diameter_rfc4005_nasreq
 
 ;; only attributes required by other applications are defined
 
@@ -41,10 +43,10 @@
    SIP-Authenticate                            609   OctetString    MV
    SIP-Authorization                           610   OctetString    MV
    SIP-Authentication-Context                  611   OctetString    MV
-;; SIP-Auth-Data-Item                          612       Grouped    MV
+   SIP-Auth-Data-Item                          612       Grouped    MV
    SIP-Item-Number                             613    Unsigned32    MV
    Server-Assignment-Type                      614    Enumerated    MV
-;; Deregistration-Reason                       615       Grouped    MV
+   Deregistration-Reason                       615       Grouped    MV
    Reason-Code                                 616    Enumerated    MV
    Reason-Info                                 617    UTF8String    MV
    Charging-Information                        618       Grouped    MV
@@ -63,7 +65,7 @@
 ;; Associated-Identities                       632       Grouped     V
    Originating-Request                         633    Enumerated    MV
    Wildcarded-Public-Identity                  634    UTF8String     V
-;; SIP-Digest-Authenticate                     635       Grouped     V
+   SIP-Digest-Authenticate                     635       Grouped     V
    Digest-Realm                                104    UTF8String    M			;; RFC-4590
    Digest-Algorithm                            111    UTF8String    M			;; RFC-4590
    Digest-QoP                                  110    UTF8String    M			;; RFC-4590
@@ -110,3 +112,34 @@
 		*[ Acct-Application-Id ]
 		*[ Vendor-Specific-Application-Id ]
 		*[ AVP ]
+
+;; 6.3.13
+	SIP-Auth-Data-Item ::= < AVP Header: 612 10415 >
+		[ SIP-Item-Number ]
+		[ SIP-Authentication-Scheme ]
+		[ SIP-Authenticate ]
+		[ SIP-Authorization ]
+		[ SIP-Authentication-Context ]
+		[ Confidentiality-Key ]
+		[ Integrity-Key ]
+		[ SIP-Digest-Authenticate ]
+		[ Framed-IP-Address ]
+		[ Framed-IPv6-Prefix ]
+		[ Framed-Interface-Id ]
+		*[ Line-Identifier ]
+		*[AVP]
+
+;; 6.3.16
+	Deregistration-Reason ::= < AVP Header: 615 10415 >
+		{ Reason-Code }
+		[ Reason-Info ]
+		* [AVP]
+
+;; 6.3.36
+	SIP-Digest-Authenticate ::= < AVP Header: 635 10415>
+		{ Digest-Realm }
+		{ Digest-QoP }
+		{ Digest-HA1}
+		[ Digest-Algorithm ]
+		*[ AVP ]
+

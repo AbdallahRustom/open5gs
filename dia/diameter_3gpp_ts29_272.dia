@@ -200,6 +200,10 @@
 	Event-Threshold-Event-1I		1662	Integer32	V
 	Restoration-Priority			1663	Unsigned32	V
 
+	;; TODO: AVPs from 11.8 onwards. SWx required AVPs
+	UE-Usage-Type					1680	Unsigned32	V
+	Core-Network-Restrictions		1704	Unsigned32	V
+
 @messages
 
 	;; 7.2.3 Update-Location-Request

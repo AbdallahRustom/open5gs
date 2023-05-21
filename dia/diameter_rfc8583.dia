@@ -27,8 +27,6 @@
 ;;
 
 @id 1
-@name	diameter_rfc5580
-
 @inherits diameter_gen_base_rfc6733
 
 ;; only used AVP are defined here.
@@ -37,7 +35,20 @@
 
 @avp_types
 
-	Operator-Name			126		OctetString		-
-	Location-Information	127		OctetString		-
-	Location-Data			128		OctetString		-
+	SourceID	649		DiameterIdentity	-	;; 7.4
+	Load		650		Grouped			-	;; 7.1
+	Load-Type	651		Enumerated		-	;; 7.2
+	Load-Value	652		Unsigned64		-	;; 7.3
+
+@grouped
+;; 7.1
+    Load ::= < AVP Header: 650 >
+             [ Load-Type ]
+             [ Load-Value ]
+             [ SourceID ]
+           * [ AVP ]
+
+@enum Load-Type
+	HOST 0	;; The load report is for a host.
+	PEER 1	;; The load report is for a peer.
 
