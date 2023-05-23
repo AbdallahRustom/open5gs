@@ -1,5 +1,7 @@
-{application, osmo_dia2gsup, [
-	{description, "Osmocom DIAMETER -> GSUP translator"},
+%-*- mode: erlang -*-
+{application, epdg,
+  [
+	{description, "ePDG"},
 	{vsn, "1"},
 	{registered, []},
 	{applications, [
@@ -10,6 +12,6 @@
 			osmo_gsup,
 			osmo_ss7
 			]},
-	{mod, {osmo_dia2gsup_app, []}},
+	{mod, {epdg_app, []}},
 	{env, []}
 ]}.
