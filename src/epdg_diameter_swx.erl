@@ -41,6 +41,8 @@
 -behaviour(gen_server).
 
 -include_lib("diameter_3gpp_ts29_273_swx.hrl").
+-include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
+
 
 %% API Function Exports
 -export([start_link/0]).
@@ -55,8 +57,11 @@
 -define(SERVER, ?MODULE).
 -define(SVC_NAME, ?MODULE).
 -define(APP_ALIAS, ?MODULE).
--define(CALLBACK_MOD, client_cb).
+-define(CALLBACK_MOD, swx_client_cb).
 -define(DIAMETER_DICT_SWX, diameter_3gpp_ts29_273_swx).
+
+-define(VENDOR_ID_3GPP, 10415).
+-define(DIAMETER_APP_ID_SWX, ?DIAMETER_DICT_SWX:id()).
 %% The service configuration. As in the server example, a client
 %% supporting multiple Diameter applications may or may not want to
 %% configure a common callback module on all applications.
@@ -64,7 +69,11 @@
         [{'Origin-Host', application:get_env(?SERVER, origin_host, "default.com")},
          {'Origin-Realm', application:get_env(?SERVER, origin_realm, "realm.default.com")},
          {'Vendor-Id', application:get_env(?SERVER, vendor_id, 0)},
-         {'Product-Name', "Client"},
+		 { 'Vendor-Specific-Application-Id', [#'diameter_base_Vendor-Specific-Application-Id'{
+			  'Vendor-Id'           = ?VENDOR_ID_3GPP,
+			  'Auth-Application-Id' = [?DIAMETER_APP_ID_SWX]}]},
+		 {'Product-Name', "osmo-epdg"},
+		 {'Supported-Vendor-Id', [10415]},
          {application,
           [{alias, ?APP_ALIAS}, {dictionary, ?DIAMETER_DICT_SWX}, {module, ?CALLBACK_MOD}]}]).
 

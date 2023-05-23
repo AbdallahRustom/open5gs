@@ -11,11 +11,13 @@
          handle_answer/4, handle_error/4, handle_request/3]).
 
 %% peer_up/3
-peer_up(_SvcName, _Peer, State) ->
+peer_up(_SvcName, Peer, State) ->
+    lager:info("Peer up: ~p~n", [Peer]),
     State.
 
 %% peer_down/3
-peer_down(_SvcName, _Peer, State) ->
+peer_down(_SvcName, Peer, State) ->
+    lager:info("Peer down: ~p~n", [Peer]),
     State.
 
 %% pick_peer/4
