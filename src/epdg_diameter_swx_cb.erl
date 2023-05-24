@@ -1,7 +1,7 @@
 %%
 %% The diameter application callback module configured by client.erl.
 %%
--module(swx_client_cb).
+-module(epdg_diameter_swx_cb).
 
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter_3gpp_ts29_273_swx.hrl").
@@ -13,7 +13,6 @@
 %% peer_up/3
 peer_up(_SvcName, Peer, State) ->
     lager:info("Peer up: ~p~n", [Peer]),
-	epdg_diameter_swx:test(),
     State.  
 
 %% peer_down/3
@@ -30,7 +29,6 @@ pick_peer([Peer | _], _, _SvcName, _State) ->
 prepare_request(#diameter_packet{msg = [ T | Avps ]}, _, {_, Caps})
   when is_list(Avps) ->
     #diameter_caps{origin_host = {OH, DH}, origin_realm = {OR, DR}} = Caps,
-	lager:info("List Head ~n"),
     {send,
      [T,
       {'Origin-Host', OH},
@@ -38,15 +36,13 @@ prepare_request(#diameter_packet{msg = [ T | Avps ]}, _, {_, Caps})
       {'Destination-Host', [DH]},
       {'Destination-Realm', DR}
       | Avps]};
-prepare_request(#diameter_packet{msg = Rec}, _, {_, Caps}) ->
+prepare_request(#diameter_packet{msg = Req}, _, {_, Caps})
+		when is_record(Req, 'MAR') ->
     #diameter_caps{origin_host = {OH, DH}, origin_realm = {OR, DR}} = Caps,
-	Msg = Rec#'MAR'{'Origin-Host' = OH,
+	Msg = Req#'MAR'{'Origin-Host' = OH,
                'Origin-Realm' = OR,
                'Destination-Host' = [DH],
                'Destination-Realm' = DR},
-	lager:info("Record Head ~p ~n", [Msg]),
-	% Encoded = diameter_codec:encode(diameter_3gpp_ts29_273_swx, Msg),
-	% lager:info("Enc Head ~p ~n", [Encoded]),
 	{send, Msg}.
 
 %% prepare_retransmit/3

@@ -43,7 +43,6 @@
 -include_lib("diameter_3gpp_ts29_273_swx.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 
-
 %% API Function Exports
 -export([start_link/0]).
 -export([start/0, stop/0, terminate/2]).
@@ -57,7 +56,7 @@
 -define(SERVER, ?MODULE).
 -define(SVC_NAME, ?MODULE).
 -define(APP_ALIAS, ?MODULE).
--define(CALLBACK_MOD, swx_client_cb).
+-define(CALLBACK_MOD, epdg_diameter_swx_cb).
 -define(DIAMETER_DICT_SWX, diameter_3gpp_ts29_273_swx).
 
 -define(VENDOR_ID_3GPP, 10415).
@@ -68,8 +67,8 @@
 %% supporting multiple Diameter applications may or may not want to
 %% configure a common callback module on all applications.
 -define(SERVICE,
-                [{'Origin-Host', application:get_env(?SERVER, origin_host, "default.com")},
-                 {'Origin-Realm', application:get_env(?SERVER, origin_realm, "realm.default.com")},
+                [{'Origin-Host', application:get_env(?SERVER, origin_host, "aaa.example.org")},
+                 {'Origin-Realm', application:get_env(?SERVER, origin_realm, "realm.example.org")},
                  {'Vendor-Id', application:get_env(?SERVER, vendor_id, 0)},
                  {'Vendor-Specific-Application-Id',
                         [#'diameter_base_Vendor-Specific-Application-Id'{
@@ -108,43 +107,40 @@ init(State) ->
     Proto = application:get_env(?SERVER, diameter_proto, sctp),
     Ip = application:get_env(?SERVER, diameter_server_ip, "192.168.56.132"),
     Port = application:get_env(?SERVER, diameter_port, 3868),
-    DiaServ = diameter:start_service(?MODULE, ?SERVICE),
-    lager:info("DiaServices is ~p~n", [DiaServ]),
-    Transport = connect({address, Proto, Ip, Port}),
-    lager:info("DiaTransport is ~p~n", [Transport]),
-
+    ok = diameter:start_service(?MODULE, ?SERVICE),
+    % lager:info("DiaServices is ~p~n", [DiaServ]),
+    {ok, _} = connect({address, Proto, Ip, Port}),
     {ok, State}.
 
 test() ->
-	test("262421234567890").
+    test("262421234567890").
 
 test(IMSI) ->
     media_auth_request(IMSI, 3, "EAP-AKA", 1, [], []).
 
-media_auth_request(IMSI, NumAuthItems, AuthScheme, RAT, CKey = [], IntegrityKey = []) ->
-    Res = gen_server:call(?SERVER,
-                          {mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey}}),
-    lager:info("Response is ~p~n", [Res]),
-    Res.
+media_auth_request(IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey) ->
+    gen_server:call(?SERVER,
+                          {mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey}}).
 
 % TODO Sync failure
-handle_call({mar, {IMSI, NumAuthItems, AuthScheme, RAT, _CKey, _IntegrityKey}}, _From, State) ->
-    SessionId = diameter:session_id(application:get_env(?SERVER, origin_host, "default.com")),
-    MAR = #'MAR'{'Session-Id' = SessionId,
-                 'Auth-Session-State' = 1,
+handle_call({mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey}}, _From, State) ->
+    SessionId = diameter:session_id(application:get_env(?SERVER, origin_host, "aaa.example.org")),
+    MAR = #'MAR'{'Vendor-Specific-Application-Id' = #'Vendor-Specific-Application-Id'{
+                    'Vendor-Id'           = ?VENDOR_ID_3GPP,
+                    'Auth-Application-Id' = [?DIAMETER_APP_ID_SWX]},
+                 'Session-Id' = SessionId,
                  'User-Name' = IMSI,
+                 'Auth-Session-State' = 1,
                  'SIP-Auth-Data-Item' = #'SIP-Auth-Data-Item'{
-                        'SIP-Authentication-Scheme' = [AuthScheme]},
+                    'SIP-Authentication-Scheme' = [AuthScheme],
+                    'Confidentiality-Key' = CKey,
+                    'Integrity-Key' = IntegrityKey},
                  'SIP-Number-Auth-Items' = NumAuthItems,
-                 'RAT-Type' = RAT,
-                 'Vendor-Specific-Application-Id' = #'Vendor-Specific-Application-Id'{
-                      'Vendor-Id'           = ?VENDOR_ID_3GPP,
-                      'Auth-Application-Id' = [?DIAMETER_APP_ID_SWX]}
+                 'RAT-Type' = RAT
                 },
     Ret = diameter:call(?SVC_NAME, ?APP_ALIAS, MAR, []),
     case Ret of
         {ok, MAA} ->
-            lager:info("MAR Success"),
             {reply, {ok, MAA}, State};
         {error, Err} ->
             lager:error("Error: ~w~n", [Err]),
