@@ -45,8 +45,8 @@ prepare_request(#diameter_packet{msg = Rec}, _, {_, Caps}) ->
                'Destination-Host' = [DH],
                'Destination-Realm' = DR},
 	lager:info("Record Head ~p ~n", [Msg]),
-	Encoded = diameter_codec:encode(diameter_3gpp_ts29_273_swx, Msg),
-	lager:info("Enc Head ~p ~n", [Encoded]),
+	% Encoded = diameter_codec:encode(diameter_3gpp_ts29_273_swx, Msg),
+	% lager:info("Enc Head ~p ~n", [Encoded]),
 	{send, Msg}.
 
 %% prepare_retransmit/3

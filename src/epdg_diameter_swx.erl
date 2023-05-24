@@ -51,7 +51,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3]).
 -export([media_auth_request/6]).
--export([test/0]).
+-export([test/0, test/1]).
 
 %% Diameter Application Definitions
 -define(SERVER, ?MODULE).
@@ -116,7 +116,10 @@ init(State) ->
     {ok, State}.
 
 test() ->
-    media_auth_request("123456789012345", 3, "AKA", 1, [], []).
+	test("262421234567890").
+
+test(IMSI) ->
+    media_auth_request(IMSI, 3, "EAP-AKA", 1, [], []).
 
 media_auth_request(IMSI, NumAuthItems, AuthScheme, RAT, CKey = [], IntegrityKey = []) ->
     Res = gen_server:call(?SERVER,
