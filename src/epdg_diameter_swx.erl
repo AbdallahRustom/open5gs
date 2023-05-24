@@ -81,9 +81,9 @@
                  [{alias, ?APP_ALIAS}, {dictionary, ?DIAMETER_DICT_SWX}, {module, ?CALLBACK_MOD}]}]).
 
 -record(state, {
-		handlers,
-		peers = #{}
-	       }).
+        handlers,
+        peers = #{}
+           }).
 
 %% @doc starts gen_server implementation process
 -spec start() -> ok | {error, term()}.
@@ -108,44 +108,45 @@ init(State) ->
     Proto = application:get_env(?SERVER, diameter_proto, sctp),
     Ip = application:get_env(?SERVER, diameter_server_ip, "192.168.56.132"),
     Port = application:get_env(?SERVER, diameter_port, 3868),
-    DiaServ = diameter:start_service(?MODULE, ?SERVICE(Name)),
-	lager:info("DiaServices is ~p~n", [DiaServ]),
+    DiaServ = diameter:start_service(?MODULE, ?SERVICE),
+    lager:info("DiaServices is ~p~n", [DiaServ]),
     Transport = connect({address, Proto, Ip, Port}),
-	lager:info("DiaTransport is ~p~n", [Transport]),
+    lager:info("DiaTransport is ~p~n", [Transport]),
 
     {ok, State}.
 
 test() ->
-	media_auth_request("123456789012345", 3, "AKA", 1, [], []).
+    media_auth_request("123456789012345", 3, "AKA", 1, [], []).
 
 media_auth_request(IMSI, NumAuthItems, AuthScheme, RAT, CKey = [], IntegrityKey = []) ->
     Res = gen_server:call(?SERVER,
                           {mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey}}),
     lager:info("Response is ~p~n", [Res]),
-	Res.
+    Res.
 
 % TODO Sync failure
 handle_call({mar, {IMSI, NumAuthItems, AuthScheme, RAT, _CKey, _IntegrityKey}}, _From, State) ->
-    SessionId = diameter:session_id(atom_to_list(?SVC_NAME)),
+    SessionId = diameter:session_id(application:get_env(?SERVER, origin_host, "default.com")),
     MAR = #'MAR'{'Session-Id' = SessionId,
-				 'Auth-Session-State' = 1,
-				 'User-Name' = IMSI,
-				 'SIP-Auth-Data-Item' = #'SIP-Auth-Data-Item'{'SIP-Authentication-Scheme' = AuthScheme},
-				 'SIP-Number-Auth-Items' = NumAuthItems,
-				 'RAT-Type' = RAT,
-				 'Vendor-Specific-Application-Id' = [#'diameter_base_Vendor-Specific-Application-Id'{
-					  'Vendor-Id'           = ?VENDOR_ID_3GPP,
-					  'Auth-Application-Id' = [?DIAMETER_APP_ID_SWX]}]
-				},
+                 'Auth-Session-State' = 1,
+                 'User-Name' = IMSI,
+                 'SIP-Auth-Data-Item' = #'SIP-Auth-Data-Item'{
+                        'SIP-Authentication-Scheme' = [AuthScheme]},
+                 'SIP-Number-Auth-Items' = NumAuthItems,
+                 'RAT-Type' = RAT,
+                 'Vendor-Specific-Application-Id' = #'Vendor-Specific-Application-Id'{
+                      'Vendor-Id'           = ?VENDOR_ID_3GPP,
+                      'Auth-Application-Id' = [?DIAMETER_APP_ID_SWX]}
+                },
     Ret = diameter:call(?SVC_NAME, ?APP_ALIAS, MAR, []),
-	case Ret of
-		{ok, MAA} ->
-			lager:info("MAR Success"),
-			{reply, {ok, MAA}, State};
+    case Ret of
+        {ok, MAA} ->
+            lager:info("MAR Success"),
+            {reply, {ok, MAA}, State};
         {error, Err} ->
             lager:error("Error: ~w~n", [Err]),
-			{reply, {error, Err}, State}
-	end.
+            {reply, {error, Err}, State}
+    end.
 
 %% @callback gen_server
 handle_cast(stop, State) ->
