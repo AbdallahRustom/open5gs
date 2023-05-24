@@ -61,22 +61,24 @@
 -define(DIAMETER_DICT_SWX, diameter_3gpp_ts29_273_swx).
 
 -define(VENDOR_ID_3GPP, 10415).
+-define(VENDOR_ID_3GPP2, 5535).
+-define(VENDOR_ID_ETSI, 13019).
 -define(DIAMETER_APP_ID_SWX, ?DIAMETER_DICT_SWX:id()).
 %% The service configuration. As in the server example, a client
 %% supporting multiple Diameter applications may or may not want to
 %% configure a common callback module on all applications.
--define(SERVICE(Name),
-        [{'Origin-Host', application:get_env(?SERVER, origin_host, "default.com")},
-         {'Origin-Realm', application:get_env(?SERVER, origin_realm, "realm.default.com")},
-         {'Vendor-Id', application:get_env(?SERVER, vendor_id, 0)},
-		 { 'Vendor-Specific-Application-Id', [#'diameter_base_Vendor-Specific-Application-Id'{
-			  'Vendor-Id'           = ?VENDOR_ID_3GPP,
-			  'Auth-Application-Id' = [?DIAMETER_APP_ID_SWX]}]},
-		 {'Product-Name', "osmo-epdg"},
-		 {'Supported-Vendor-Id', [10415]},
-	       {decode_format, list},
-         { application,
-          [{alias, ?APP_ALIAS}, {dictionary, ?DIAMETER_DICT_SWX}, {module, ?CALLBACK_MOD}]}]).
+-define(SERVICE,
+                [{'Origin-Host', application:get_env(?SERVER, origin_host, "default.com")},
+                 {'Origin-Realm', application:get_env(?SERVER, origin_realm, "realm.default.com")},
+                 {'Vendor-Id', application:get_env(?SERVER, vendor_id, 0)},
+                 {'Vendor-Specific-Application-Id',
+                        [#'diameter_base_Vendor-Specific-Application-Id'{
+                         'Vendor-Id'           = ?VENDOR_ID_3GPP,
+                         'Auth-Application-Id' = [?DIAMETER_APP_ID_SWX]}]},
+                 {'Product-Name', "osmo-epdg"},
+                 {'Supported-Vendor-Id', [?VENDOR_ID_3GPP, ?VENDOR_ID_ETSI, ?VENDOR_ID_3GPP2]},
+                 { application,
+                 [{alias, ?APP_ALIAS}, {dictionary, ?DIAMETER_DICT_SWX}, {module, ?CALLBACK_MOD}]}]).
 
 -record(state, {
 		handlers,
