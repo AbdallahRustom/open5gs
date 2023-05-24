@@ -13,7 +13,8 @@
 %% peer_up/3
 peer_up(_SvcName, Peer, State) ->
     lager:info("Peer up: ~p~n", [Peer]),
-    State.
+	epdg_diameter_swx:test(),
+    State.  
 
 %% peer_down/3
 peer_down(_SvcName, Peer, State) ->
@@ -25,15 +26,26 @@ pick_peer([Peer | _], _, _SvcName, _State) ->
     {ok, Peer}.
 
 %% prepare_request/3
-prepare_request(#diameter_packet{msg = [ T | Avps]}, _, {_, Caps}) ->
+
+prepare_request(#diameter_packet{msg = [ T | Avps ]}, _, {_, Caps})
+  when is_list(Avps) ->
     #diameter_caps{origin_host = {OH, DH}, origin_realm = {OR, DR}} = Caps,
+	lager:info("List Head ~n"),
     {send,
      [T,
       {'Origin-Host', OH},
       {'Origin-Realm', OR},
       {'Destination-Host', [DH]},
       {'Destination-Realm', DR}
-      | Avps]}.
+      | Avps]};
+prepare_request(#diameter_packet{msg = Rec}, _, {_, Caps}) ->
+    #diameter_caps{origin_host = {OH, DH}, origin_realm = {OR, DR}} = Caps,
+	Msg = Rec#'MAR'{'Origin-Host' = OH,
+               'Origin-Realm' = OR,
+               'Destination-Host' = [DH],
+               'Destination-Realm' = DR},
+	lager:info("Record Head ~p ~n", [Msg]),
+    {send, Msg}.
 
 %% prepare_retransmit/3
 prepare_retransmit(Packet, SvcName, Peer) ->

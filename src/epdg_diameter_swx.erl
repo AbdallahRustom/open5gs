@@ -74,7 +74,8 @@
 			  'Auth-Application-Id' = [?DIAMETER_APP_ID_SWX]}]},
 		 {'Product-Name', "osmo-epdg"},
 		 {'Supported-Vendor-Id', [10415]},
-         {application,
+	       {decode_format, list},
+         { application,
           [{alias, ?APP_ALIAS}, {dictionary, ?DIAMETER_DICT_SWX}, {module, ?CALLBACK_MOD}]}]).
 
 -record(state, {
@@ -129,8 +130,11 @@ handle_call({mar, {IMSI, NumAuthItems, AuthScheme, RAT, _CKey, _IntegrityKey}}, 
 				 'User-Name' = IMSI,
 				 'SIP-Auth-Data-Item' = #'SIP-Auth-Data-Item'{'SIP-Authentication-Scheme' = AuthScheme},
 				 'SIP-Number-Auth-Items' = NumAuthItems,
-				 'RAT-Type' = RAT
-				 },
+				 'RAT-Type' = RAT,
+				 'Vendor-Specific-Application-Id' = [#'diameter_base_Vendor-Specific-Application-Id'{
+					  'Vendor-Id'           = ?VENDOR_ID_3GPP,
+					  'Auth-Application-Id' = [?DIAMETER_APP_ID_SWX]}]
+				},
     Ret = diameter:call(?SVC_NAME, ?APP_ALIAS, MAR, []),
 	case Ret of
 		{ok, MAA} ->
