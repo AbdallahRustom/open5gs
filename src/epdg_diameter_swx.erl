@@ -114,7 +114,7 @@ init(State) ->
     {ok, State}.
 
 test() ->
-    test("262421234567890").
+    test("001011234567890").
 
 test(IMSI) ->
     multimedia_auth_request(IMSI, 3, "EAP-AKA", 1, [], []).
