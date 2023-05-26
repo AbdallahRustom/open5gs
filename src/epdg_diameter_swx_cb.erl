@@ -64,14 +64,18 @@ prepare_retransmit(Packet, SvcName, Peer) ->
 %% encoding and not otherwise, output to the terminal in the
 %% the former case, return in the latter.
 
-handle_answer(#diameter_packet{msg = Msg}, Request, _SvcName, _Peer)
+handle_answer(#diameter_packet{msg = Msg, errors = []}, Request, _SvcName, _Peer)
     when is_list(Request) ->
-    lager:info("Some Answer list: ~p~n", [Msg]),
     {ok, Msg};
+handle_answer(#diameter_packet{msg = Msg, errors = Errors}, Request, _SvcName, _Peer)
+    when is_list(Request) ->
+    {error, Errors};
 
+handle_answer(#diameter_packet{msg = Msg, errors = []}, _Request, _SvcName, _Peer) ->
+    {ok, Msg};
 handle_answer(#diameter_packet{msg = Msg, errors = Errors}, _Request, _SvcName, _Peer) ->
     lager:info("Some Answer res: ~p / Errors ~p ~n", [Msg, Errors]),
-    {ok, Msg}.
+    {error, Errors}.
 
 %% handle_error/4
 handle_error(Reason, Request, _SvcName, _Peer) when is_list(Request) ->
