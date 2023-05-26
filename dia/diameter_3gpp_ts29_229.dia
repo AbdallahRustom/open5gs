@@ -143,3 +143,21 @@
 		[ Digest-Algorithm ]
 		*[ AVP ]
 
+;; 6.3.15
+@enum Server-Assignment-Type
+    NO_ASSIGNMENT                               0
+    REGISTRATION                                1
+    RE_REGISTRATION                             2
+    UNREGISTERED_USER                           3
+    TIMEOUT_DEREGISTRATION                      4
+    USER_DEREGISTRATION                         5
+    TIMEOUT_DEREGISTRATION_STORE_SERVER_NAME    6
+    USER_DEREGISTRATION_STORE_SERVER_NAME       7
+    ADMINISTRATIVE_DEREGISTRATION               8
+    AUTHENTICATION_FAILURE                      9
+    AUTHENTICATION_TIMEOUT                      10
+    DEREGISTRATION_TOO_MUCH_DATA                11
+    AAA_USER_DATA_REQUEST                       12
+    PGW_UPDATE                                  13
+    RESTORATION                                 14
+
