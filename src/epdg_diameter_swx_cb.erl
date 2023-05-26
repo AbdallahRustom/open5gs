@@ -36,6 +36,7 @@ prepare_request(#diameter_packet{msg = [ T | Avps ]}, _, {_, Caps})
       {'Destination-Host', [DH]},
       {'Destination-Realm', DR}
       | Avps]};
+% TODO: is there a simple way to capture all the following requests?
 prepare_request(#diameter_packet{msg = Req}, _, {_, Caps})
 		when is_record(Req, 'MAR') ->
     #diameter_caps{origin_host = {OH, DH}, origin_realm = {OR, DR}} = Caps,
