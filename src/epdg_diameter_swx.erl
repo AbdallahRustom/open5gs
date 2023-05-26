@@ -76,9 +76,14 @@
                          'Vendor-Id'           = ?VENDOR_ID_3GPP,
                          'Auth-Application-Id' = [?DIAMETER_APP_ID_SWX]}]},
                  {'Product-Name', "osmo-epdg"},
+                 % TODO: check which we should annouce here as Supported-Vendor-Id
                  {'Supported-Vendor-Id', [?VENDOR_ID_3GPP, ?VENDOR_ID_ETSI, ?VENDOR_ID_3GPP2]},
                  { application,
-                 [{alias, ?APP_ALIAS}, {dictionary, ?DIAMETER_DICT_SWX}, {module, ?CALLBACK_MOD}]}]).
+					 [
+						{alias, ?APP_ALIAS},
+						{dictionary, ?DIAMETER_DICT_SWX},
+						{module, ?CALLBACK_MOD},
+						{answer_errors, callback}]}]).
 
 -record(state, {
         handlers,
