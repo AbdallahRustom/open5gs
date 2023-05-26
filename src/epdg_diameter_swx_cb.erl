@@ -43,6 +43,14 @@ prepare_request(#diameter_packet{msg = Req}, _, {_, Caps})
                'Origin-Realm' = OR,
                'Destination-Host' = [DH],
                'Destination-Realm' = DR},
+	{send, Msg};
+prepare_request(#diameter_packet{msg = Req}, _, {_, Caps})
+		when is_record(Req, 'SAR') ->
+    #diameter_caps{origin_host = {OH, DH}, origin_realm = {OR, DR}} = Caps,
+	Msg = Req#'SAR'{'Origin-Host' = OH,
+               'Origin-Realm' = OR,
+               'Destination-Host' = [DH],
+               'Destination-Realm' = DR},
 	{send, Msg}.
 
 %% prepare_retransmit/3

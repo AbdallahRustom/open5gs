@@ -50,6 +50,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3]).
 -export([multimedia_auth_request/6]).
+-export([server_assignment_request/3]).
 -export([test/0, test/1]).
 
 %% Diameter Application Definitions
@@ -121,6 +122,10 @@ test(IMSI) ->
 multimedia_auth_request(IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey) ->
     gen_server:call(?SERVER,
                           {mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey}}).
+% APN is optional and should be []
+server_assignment_request(IMSI, Type, APN) ->
+    gen_server:call(?SERVER,
+                          {sar, {IMSI, Type, APN}}).
 
 % TODO Sync failure
 handle_call({mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey}}, _From, State) ->
@@ -142,6 +147,25 @@ handle_call({mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey}}, _F
     case Ret of
         {ok, MAA} ->
             {reply, {ok, MAA}, State};
+        {error, Err} ->
+            lager:error("Error: ~w~n", [Err]),
+            {reply, {error, Err}, State}
+    end;
+handle_call({sar, {IMSI, Type, APN}}, _From, State) ->
+    SessionId = diameter:session_id(application:get_env(?SERVER, origin_host, "aaa.example.org")),
+    SAR = #'SAR'{'Vendor-Specific-Application-Id' = #'Vendor-Specific-Application-Id'{
+                    'Vendor-Id'           = ?VENDOR_ID_3GPP,
+                    'Auth-Application-Id' = [?DIAMETER_APP_ID_SWX]},
+                 'Session-Id' = SessionId,
+                 'User-Name' = IMSI,
+                 'Auth-Session-State' = 1,
+                 'Server-Assignment-Type' = Type,
+                 'Service-Selection' = APN
+                },
+    Ret = diameter:call(?SVC_NAME, ?APP_ALIAS, SAR, []),
+    case Ret of
+        {ok, SAA} ->
+            {reply, {ok, SAA}, State};
         {error, Err} ->
             lager:error("Error: ~w~n", [Err]),
             {reply, {error, Err}, State}
