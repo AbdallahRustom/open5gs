@@ -165,7 +165,7 @@ handle_call({sar, {IMSI, Type, APN}}, _From, State) ->
                  'User-Name' = IMSI,
                  'Auth-Session-State' = 1,
                  'Server-Assignment-Type' = Type,
-                 'Service-Selection' = APN
+                 'Service-Selection' = [APN]
                 },
     Ret = diameter:call(?SVC_NAME, ?APP_ALIAS, SAR, []),
     case Ret of
