@@ -2368,6 +2368,10 @@ smf_bearer_t *smf_bearer_add(smf_sess_t *sess)
     dl_pdr->apn = ogs_strdup(sess->session.name);
     ogs_assert(dl_pdr->apn);
 
+    if (ogs_pfcp_self()->usageLoggerState.enabled) {
+        ogs_pfcp_pdr_associate_urr(dl_pdr, urr);
+    }
+
     dl_pdr->src_if = OGS_PFCP_INTERFACE_CORE;
 
     ul_pdr = ogs_pfcp_pdr_add(&sess->pfcp);
