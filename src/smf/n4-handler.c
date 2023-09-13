@@ -1418,13 +1418,13 @@ static void log_usage_logger_data(UsageLoggerData usageLoggerData) {
     }
 }
 
-static void log_usage_reports(sgwc_sess_t *sess, ogs_pfcp_session_report_request_t *pfcp_req) {
+static void log_usage_reports(smf_sess_t *sess, ogs_pfcp_session_report_request_t *pfcp_req) {
     int i = 0;
-    sgwc_ue_t *sgwc_ue = NULL;
+    smf_ue_t *smf_ue = NULL;
     
     ogs_assert(sess);
-    sgwc_ue = sess->sgwc_ue;
-    ogs_assert(sgwc_ue);
+    smf_ue = sess->smf_ue;
+    ogs_assert(smf_ue);
 
     for (i = 0; i < OGS_ARRAY_SIZE(pfcp_req->usage_report); i++) {
         ogs_pfcp_tlv_usage_report_session_report_request_t *usage_report =
@@ -1463,13 +1463,13 @@ static void log_usage_reports(sgwc_sess_t *sess, ogs_pfcp_session_report_request
     }
 }
 
-static void log_deletion_usage_reports(sgwc_sess_t *sess, ogs_pfcp_session_deletion_response_t *pfcp_rsp) {
+static void log_deletion_usage_reports(smf_sess_t *sess, ogs_pfcp_session_deletion_response_t *pfcp_rsp) {
     int i = 0;
-    sgwc_ue_t *sgwc_ue = NULL;
+    smf_ue_t *smf_ue = NULL;
     
     ogs_assert(sess);
-    sgwc_ue = sess->sgwc_ue;
-    ogs_assert(sgwc_ue);
+    smf_ue = sess->smf_ue;
+    ogs_assert(smf_ue);
 
     for (i = 0; i < OGS_ARRAY_SIZE(pfcp_rsp->usage_report); i++) {
         ogs_pfcp_tlv_usage_report_session_deletion_response_t *usage_report =
