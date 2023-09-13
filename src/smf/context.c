@@ -2343,7 +2343,10 @@ smf_bearer_t *smf_bearer_add(smf_sess_t *sess)
     smf_pf_identifier_pool_init(bearer);
 
     ogs_list_init(&bearer->pf_list);
+
     
+    ogs_pfcp_urr_t *urr = NULL;
+
     /* If usage logging enabled create a new URR */
     if (ogs_pfcp_self()->usageLoggerState.enabled) {
         urr = ogs_pfcp_urr_add(&sess->pfcp);
@@ -2355,7 +2358,7 @@ smf_bearer_t *smf_bearer_add(smf_sess_t *sess)
         /* Enable Immediate Start Time Metering */
         urr->meas_info.istm = 1;
     }
- 
+     
     /* PDR */
     dl_pdr = ogs_pfcp_pdr_add(&sess->pfcp);
     ogs_assert(dl_pdr);
