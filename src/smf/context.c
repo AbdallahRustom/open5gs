@@ -2382,6 +2382,10 @@ smf_bearer_t *smf_bearer_add(smf_sess_t *sess)
     ul_pdr->apn = ogs_strdup(sess->session.name);
     ogs_assert(ul_pdr->apn);
 
+    if (ogs_pfcp_self()->usageLoggerState.enabled) {
+        ogs_pfcp_pdr_associate_urr(ul_pdr, urr);
+    }
+
     ul_pdr->src_if = OGS_PFCP_INTERFACE_ACCESS;
 
     ul_pdr->outer_header_removal_len = 1;
