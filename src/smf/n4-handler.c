@@ -1422,50 +1422,50 @@ static void log_usage_logger_data(UsageLoggerData usageLoggerData) {
     }
 }
 
-// static void log_usage_reports(smf_sess_t *sess, ogs_pfcp_session_report_request_t *pfcp_req) {
-//     int i = 0;
-//     smf_ue_t *smf_ue = NULL;
+static void log_usage_reports(smf_sess_t *sess, ogs_pfcp_session_report_request_t *pfcp_req) {
+    int i = 0;
+    smf_ue_t *smf_ue = NULL;
     
-//     ogs_assert(sess);
-//     smf_ue = sess->smf_ue;
-//     ogs_assert(smf_ue);
+    ogs_assert(sess);
+    smf_ue = sess->smf_ue;
+    ogs_assert(smf_ue);
 
-//     for (i = 0; i < OGS_ARRAY_SIZE(pfcp_req->usage_report); i++) {
-//         ogs_pfcp_tlv_usage_report_session_report_request_t *usage_report =
-//             &pfcp_req->usage_report[i];
+    for (i = 0; i < OGS_ARRAY_SIZE(pfcp_req->usage_report); i++) {
+        ogs_pfcp_tlv_usage_report_session_report_request_t *usage_report =
+            &pfcp_req->usage_report[i];
 
-//         ogs_pfcp_volume_measurement_t volume;
-//         UsageLoggerData usageLoggerData = {0};
+        ogs_pfcp_volume_measurement_t volume;
+        UsageLoggerData usageLoggerData = {0};
 
-//         if (0 == usage_report->presence) {
-//             /* We have reached the end of the usage_report list */
-//             break;
-//         }
+        if (0 == usage_report->presence) {
+            /* We have reached the end of the usage_report list */
+            break;
+        }
 
-//         if (0 == usage_report->urr_id.presence) {
-//             ogs_error("Usage report URR has no ID field!");
-//             continue;
-//         }
+        if (0 == usage_report->urr_id.presence) {
+            ogs_error("Usage report URR has no ID field!");
+            continue;
+        }
 
-//         if (0 == usage_report->volume_measurement.presence) {
-//             ogs_error("No volume measurements in usage report!");
-//             continue;
-//         }
+        if (0 == usage_report->volume_measurement.presence) {
+            ogs_error("No volume measurements in usage report!");
+            continue;
+        }
 
-//         ogs_pfcp_parse_volume_measurement(&volume, &usage_report->volume_measurement);
-//         if (0 == volume.ulvol) {
-//             ogs_error("URR did not contain uplink volume measurement!");
-//             continue;
-//         } 
-//         if (0 == volume.dlvol) {
-//             ogs_error("URR did not contain downlink volume measurement!");
-//             continue;
-//         }
+        ogs_pfcp_parse_volume_measurement(&volume, &usage_report->volume_measurement);
+        if (0 == volume.ulvol) {
+            ogs_error("URR did not contain uplink volume measurement!");
+            continue;
+        } 
+        if (0 == volume.dlvol) {
+            ogs_error("URR did not contain downlink volume measurement!");
+            continue;
+        }
 
-//         usageLoggerData = build_usage_logger_data(sess, "session_update", volume.uplink_volume, volume.downlink_volume);
-//         log_usage_logger_data(usageLoggerData);
-//     }
-// }
+        usageLoggerData = build_usage_logger_data(sess, "session_update", volume.uplink_volume, volume.downlink_volume);
+        log_usage_logger_data(usageLoggerData);
+    }
+}
 
 // static void log_deletion_usage_reports(smf_sess_t *sess, ogs_pfcp_session_deletion_response_t *pfcp_rsp) {
 //     int i = 0;
