@@ -173,11 +173,6 @@ uint8_t smf_5gc_n4_handle_session_establishment_response(
     ogs_debug("Session Establishment Response [5gc]");
 
     ogs_pfcp_xact_commit(xact);
-
-    if (ogs_pfcp_self()->usageLoggerState.enabled) {
-        ogs_error("usageloggerstate is enabled");
-        log_start_usage_reports(sess);
-    }
     
     if (rsp->up_f_seid.presence == 0) {
         ogs_error("No UP F-SEID");
@@ -211,6 +206,11 @@ uint8_t smf_5gc_n4_handle_session_establishment_response(
     ogs_list_for_each(&sess->pfcp.pdr_list, pdr) {
         far = pdr->far;
         ogs_assert(far);
+
+        if (ogs_pfcp_self()->usageLoggerState.enabled) {
+        ogs_error("usageloggerstate is enabled");
+        log_start_usage_reports(sess);
+        }
 
         if (pdr->src_if == OGS_PFCP_INTERFACE_ACCESS) {
             if (far->dst_if == OGS_PFCP_INTERFACE_CP_FUNCTION)
@@ -1500,7 +1500,10 @@ static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* eve
     usageLoggerData.plmn = ogs_plmn_id_hexdump(&sess->e_tai.plmn_id);
     usageLoggerData.tac = sess->e_tai.tac;
     usageLoggerData.eci = sess->e_cgi.cell_id;
-    if (!ogs_ip_to_string(&sess->gnb_n3_ip,  usageLoggerData.ue_ip, IP_STR_MAX_LEN)) {
+
+    const ogs_ip_t* ip_ptr = (const ogs_ip_t*)sess->ipv4->addr;
+
+    if (!ogs_ip_to_string(ip_ptr, usageLoggerData.ue_ip, IP_STR_MAX_LEN)) {
        ogs_error("Failed to convert raw UE IP bytes");
     }
     if (!ogs_ip_to_string(&sess->sgw_s5c_ip, usageLoggerData.sgw_ip, IP_STR_MAX_LEN)) {
