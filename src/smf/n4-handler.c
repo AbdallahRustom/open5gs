@@ -36,6 +36,7 @@ static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* eve
 static void log_usage_logger_data(UsageLoggerData usageLoggerData);
 static bool hex_array_to_string(uint8_t* hex_array, size_t hex_array_len, char* hex_string, size_t hex_string_len);
 static bool ogs_ip_to_string(const ogs_ip_t* ip, char* buffer, size_t buffer_size);
+static bool ogs_time_to_string(const ogs_time_t* time_value, char* buffer, size_t buffer_size);
 
 uint8_t gtp_cause_from_pfcp(uint8_t pfcp_cause, uint8_t gtp_version)
 {
@@ -1493,7 +1494,7 @@ static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* eve
     strncpy(usageLoggerData.msisdn_bcd, smf_ue->msisdn_bcd, MSISDN_BCD_STR_MAX_LEN);
     strncpy(usageLoggerData.imeisv_bcd, smf_ue->imeisv_bcd, IMEISV_BCD_STR_MAX_LEN);
 
-    if (!hex_array_to_string(sess->ue_location_timestamp, usageLoggerData.timezone_raw, TIMEZONE_RAW_STR_MAX_LEN)) {
+    if (ogs_time_to_string(&sess->ue_location_timestamp,usageLoggerData.timezone_raw, TIMEZONE_RAW_STR_MAX_LEN)) {
        ogs_error("Failed to convert raw timezone bytes to timezone hex string!");
     }
     usageLoggerData.plmn = ogs_plmn_id_hexdump(&sess->e_tai.plmn_id);
@@ -1545,5 +1546,21 @@ static bool ogs_ip_to_string(const ogs_ip_t* ip, char* buffer, size_t buffer_siz
     return true;
 }
 
-
-
+// Convert ogs_time_t to a string
+static bool ogs_time_to_string(const ogs_time_t* time_value, char* buffer, size_t buffer_size) {
+    if (time_value == NULL || buffer == NULL || buffer_size == 0) {
+        return false; // Handle invalid input
+    }
+    const char* format = "%Y-%m-%d %H:%M:%S"; // Adjust the format as needed
+    // Convert time to string with a specific format
+    time_t time_seconds = (time_t)(*time_value);
+    struct tm tm_info;
+    if (gmtime_r(&time_seconds, &tm_info) == NULL) {
+        return false; // Error in conversion
+    }
+    if (strftime(buffer, buffer_size, format, &tm_info)) {
+        return true;
+    } else {
+        return false; // Error in conversion
+    }
+}
