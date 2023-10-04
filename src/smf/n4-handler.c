@@ -34,7 +34,6 @@ static void log_deletion_usage_reports(smf_sess_t *sess, ogs_pfcp_session_deleti
 static void log_start_usage_reports(smf_sess_t *sess);
 static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* event, uint64_t octets_in, uint64_t octets_out);
 static void log_usage_logger_data(UsageLoggerData usageLoggerData);
-// static bool hex_array_to_string(uint8_t* hex_array, size_t hex_array_len, char* hex_string, size_t hex_string_len);
 static bool ogs_ip_to_string(const ogs_ip_t* ip, char* buffer, size_t buffer_size);
 static bool ogs_time_to_string(const ogs_time_t* time_value, char* buffer, size_t buffer_size);
 
@@ -1494,9 +1493,9 @@ static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* eve
     strncpy(usageLoggerData.msisdn_bcd, smf_ue->msisdn_bcd, MSISDN_BCD_STR_MAX_LEN);
     strncpy(usageLoggerData.imeisv_bcd, smf_ue->imeisv_bcd, IMEISV_BCD_STR_MAX_LEN);
 
-    // if (ogs_time_to_string(&sess->ue_location_timestamp,usageLoggerData.timezone_raw, TIMEZONE_RAW_STR_MAX_LEN)) {
-    //    ogs_error("Failed to convert raw timezone bytes to timezone hex string!");
-    // }
+    if (ogs_time_to_string(&sess->ue_location_timestamp,usageLoggerData.timezone_raw, TIMEZONE_RAW_STR_MAX_LEN)) {
+       ogs_error("Failed to convert ogs_time_t to timezone string!");
+    }
     usageLoggerData.plmn = ogs_plmn_id_hexdump(&sess->e_tai.plmn_id);
     usageLoggerData.tac = sess->e_tai.tac;
     usageLoggerData.eci = sess->e_cgi.cell_id;
@@ -1520,19 +1519,6 @@ static void log_usage_logger_data(UsageLoggerData usageLoggerData) {
         ogs_info("Failed to log usage data to file %s", ogs_pfcp_self()->usageLoggerState.filename);
     }
 }
-
-// static bool hex_array_to_string(uint8_t* hex_array, size_t hex_array_len, char* hex_string, size_t hex_string_len) {
-//     int i;
-//     for (i = 0; i < hex_array_len; i++) {
-//         if (hex_string_len < i) {
-//             return false;
-//         }
-        
-//         sprintf(hex_string + (i * 2), "%02X", hex_array[i]);
-//     }
-
-//     return true;
-// }
 
 // Convert ogs_ip_t to a string
 static bool ogs_ip_to_string(const ogs_ip_t* ip, char* buffer, size_t buffer_size) {
