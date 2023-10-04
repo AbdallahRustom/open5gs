@@ -1500,8 +1500,8 @@ static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* eve
     usageLoggerData.plmn = ogs_plmn_id_hexdump(&sess->e_tai.plmn_id);
     usageLoggerData.tac = sess->e_tai.tac;
     usageLoggerData.eci = sess->e_cgi.cell_id;
-    if (!ogs_ip_to_string(&sess->gnode->ip,  usageLoggerData.ue_ip, IP_STR_MAX_LEN)) {
-       ogs_error("Failed to convert raw IP bytes to IP hex string!");
+    if (!ogs_ip_to_string(&sess->gnb_n3_ip,  usageLoggerData.ue_ip, IP_STR_MAX_LEN)) {
+       ogs_error("Failed to convert raw UE IP bytes");
     }
     if (!ogs_ip_to_string(&sess->sgw_s5c_ip, usageLoggerData.sgw_ip, IP_STR_MAX_LEN)) {
        ogs_error("Failed to convert ogs IP bytes to string!");
