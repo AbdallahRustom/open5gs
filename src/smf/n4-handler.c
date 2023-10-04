@@ -1423,50 +1423,50 @@ static void log_usage_reports(smf_sess_t *sess, ogs_pfcp_session_report_request_
     }
 }
 
-// static void log_deletion_usage_reports(smf_sess_t *sess, ogs_pfcp_session_deletion_response_t *pfcp_rsp) {
-//     int i = 0;
-//     smf_ue_t *smf_ue = NULL;
+static void log_deletion_usage_reports(smf_sess_t *sess, ogs_pfcp_session_deletion_response_t *pfcp_rsp) {
+    int i = 0;
+    smf_ue_t *smf_ue = NULL;
     
-//     ogs_assert(sess);
-//     smf_ue = sess->smf_ue;
-//     ogs_assert(smf_ue);
+    ogs_assert(sess);
+    smf_ue = sess->smf_ue;
+    ogs_assert(smf_ue);
 
-//     for (i = 0; i < OGS_ARRAY_SIZE(pfcp_rsp->usage_report); i++) {
-//         ogs_pfcp_tlv_usage_report_session_deletion_response_t *usage_report =
-//             &pfcp_rsp->usage_report[i];
+    for (i = 0; i < OGS_ARRAY_SIZE(pfcp_rsp->usage_report); i++) {
+        ogs_pfcp_tlv_usage_report_session_deletion_response_t *usage_report =
+            &pfcp_rsp->usage_report[i];
 
-//         ogs_pfcp_volume_measurement_t volume;
-//         UsageLoggerData usageLoggerData = {0};
+        ogs_pfcp_volume_measurement_t volume;
+        UsageLoggerData usageLoggerData = {0};
 
-//         if (0 == usage_report->presence) {
-//             /* We have reached the end of the usage_report list */
-//             break;
-//         }
+        if (0 == usage_report->presence) {
+            /* We have reached the end of the usage_report list */
+            break;
+        }
 
-//         if (0 == usage_report->urr_id.presence) {
-//             ogs_error("Usage report URR has no ID field!");
-//             continue;
-//         }
+        if (0 == usage_report->urr_id.presence) {
+            ogs_error("Usage report URR has no ID field!");
+            continue;
+        }
 
-//         if (0 == usage_report->volume_measurement.presence) {
-//             ogs_error("No volume measurements in usage report!");
-//             continue;
-//         }
+        if (0 == usage_report->volume_measurement.presence) {
+            ogs_error("No volume measurements in usage report!");
+            continue;
+        }
 
-//         ogs_pfcp_parse_volume_measurement(&volume, &usage_report->volume_measurement);
-//         if (0 == volume.ulvol) {
-//             ogs_error("URR did not contain uplink volume measurement!");
-//             continue;
-//         } 
-//         if (0 == volume.dlvol) {
-//             ogs_error("URR did not contain downlink volume measurement!");
-//             continue;
-//         }
+        ogs_pfcp_parse_volume_measurement(&volume, &usage_report->volume_measurement);
+        if (0 == volume.ulvol) {
+            ogs_error("URR did not contain uplink volume measurement!");
+            continue;
+        } 
+        if (0 == volume.dlvol) {
+            ogs_error("URR did not contain downlink volume measurement!");
+            continue;
+        }
 
-//         usageLoggerData = build_usage_logger_data(sess, "session_end", volume.uplink_volume, volume.downlink_volume);
-//         log_usage_logger_data(usageLoggerData);
-//     }
-// }
+        usageLoggerData = build_usage_logger_data(sess, "session_end", volume.uplink_volume, volume.downlink_volume);
+        log_usage_logger_data(usageLoggerData);
+    }
+}
 
 static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* event, uint64_t octets_in, uint64_t octets_out) {
     smf_ue_t *smf_ue = NULL;
@@ -1500,7 +1500,7 @@ static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* eve
     //    ogs_error("Failed to convert raw IP bytes to IP hex string!");
     //}
     //ogs_assert(OGS_ADDRSTRLEN < IP_STR_MAX_LEN);
-    OGS_ADDR(sess->smf_ue, usageLoggerData.ue_ip);
+    // OGS_ADDR(sess->smf_ue, usageLoggerData.ue_ip);
     OGS_ADDR(ogs_gtp_self()->gtpc_addr, usageLoggerData.pgw_ip);
 
     return usageLoggerData;
