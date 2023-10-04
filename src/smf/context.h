@@ -139,9 +139,9 @@ typedef struct smf_ue_s {
     uint8_t ue_ip_raw[OGS_MAX_IP_RAW_LEN];
     int ue_ip_raw_len;
 
-        /* PGW IP */
-    uint8_t pgw_ip_raw[OGS_MAX_IP_RAW_LEN];
-    int pgw_ip_raw_len;
+    /* SGW IP */
+    uint8_t SGW_ip_raw[OGS_MAX_IP_RAW_LEN];
+    int SGW_ip_raw_len;
 
     ogs_list_t sess_list;
 } smf_ue_t;

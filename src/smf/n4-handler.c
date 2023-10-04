@@ -1500,7 +1500,7 @@ static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* eve
     if (!hex_array_to_string(smf_ue->ue_ip_raw, smf_ue->ue_ip_raw_len, usageLoggerData.ue_ip, IP_STR_MAX_LEN)) {
        ogs_error("Failed to convert raw IP bytes to IP hex string!");
     }
-    if (!hex_array_to_string(smf_ue->pgw_ip_raw, smf_ue->pgw_ip_raw_len, usageLoggerData.pgw_ip, IP_STR_MAX_LEN)) {
+    if (!hex_array_to_string(smf_ue->SGW_ip_raw, smf_ue->SGW_ip_raw_len, usageLoggerData.sgw_ip, IP_STR_MAX_LEN)) {
        ogs_error("Failed to convert raw IP bytes to IP hex string!");
     }
     ogs_assert(OGS_ADDRSTRLEN < IP_STR_MAX_LEN);
