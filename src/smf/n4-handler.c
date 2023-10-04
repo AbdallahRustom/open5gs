@@ -697,6 +697,10 @@ int smf_5gc_n4_handle_session_deletion_response(
         status = OGS_SBI_HTTP_STATUS_BAD_REQUEST;
     }
 
+    if (rsp->usage_report->presence) {
+        log_deletion_usage_reports(sess, rsp);
+    }
+
     if (status != OGS_SBI_HTTP_STATUS_OK) {
         char *strerror = ogs_msprintf(
                 "[%d] PFCP Cause [%d] : Not Accepted", trigger, rsp->cause.u8);
