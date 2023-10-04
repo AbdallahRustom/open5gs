@@ -484,6 +484,8 @@ int smf_context_parse_config(void)
                     /* handle config in gtp library */
                 } else if (!strcmp(smf_key, "gtpu")) {
                     /* handle config in gtp library */
+                } else if (!strcmp(smf_key, "cdr")) {
+                    /* handle config in pfcp library */
                 } else if (!strcmp(smf_key, "dns")) {
                     ogs_yaml_iter_t dns_iter;
                     ogs_yaml_iter_recurse(&smf_iter, &dns_iter);
