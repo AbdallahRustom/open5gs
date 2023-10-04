@@ -1494,9 +1494,9 @@ static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* eve
     strncpy(usageLoggerData.msisdn_bcd, smf_ue->msisdn_bcd, MSISDN_BCD_STR_MAX_LEN);
     strncpy(usageLoggerData.imeisv_bcd, smf_ue->imeisv_bcd, IMEISV_BCD_STR_MAX_LEN);
 
-    if (ogs_time_to_string(&sess->ue_location_timestamp,usageLoggerData.timezone_raw, TIMEZONE_RAW_STR_MAX_LEN)) {
-       ogs_error("Failed to convert raw timezone bytes to timezone hex string!");
-    }
+    // if (ogs_time_to_string(&sess->ue_location_timestamp,usageLoggerData.timezone_raw, TIMEZONE_RAW_STR_MAX_LEN)) {
+    //    ogs_error("Failed to convert raw timezone bytes to timezone hex string!");
+    // }
     usageLoggerData.plmn = ogs_plmn_id_hexdump(&sess->e_tai.plmn_id);
     usageLoggerData.tac = sess->e_tai.tac;
     usageLoggerData.eci = sess->e_cgi.cell_id;
@@ -1551,17 +1551,18 @@ static bool ogs_time_to_string(const ogs_time_t* time_value, char* buffer, size_
     if (time_value == NULL || buffer == NULL || buffer_size == 0) {
         return false; // Handle invalid input
     }
-    const char* format = "%H:%M:%S"; // Adjust the format as needed
+    
     // Convert time to string with a specific format
     time_t time_seconds = (time_t)(*time_value);
     struct tm tm_info;
-
+    
     if (gmtime_r(&time_seconds, &tm_info) == NULL) {
         return false; // Error in conversion
     }
-    if (strftime(buffer, buffer_size, format, &tm_info)) {
-        return true;
-    } 
-
-    return true;
+    
+    if (strftime(buffer, buffer_size, "%H:%M:%S", &tm_info) == 0) {
+        return false; // Error in conversion
+    }
+    
+    return true; // Successful conversion
 }
