@@ -172,6 +172,10 @@ uint8_t smf_5gc_n4_handle_session_establishment_response(
 
     ogs_pfcp_xact_commit(xact);
 
+    if (ogs_pfcp_self()->usageLoggerState.enabled) {
+        log_start_usage_reports(sess);
+    }
+    
     if (rsp->up_f_seid.presence == 0) {
         ogs_error("No UP F-SEID");
         cause_value = OGS_PFCP_CAUSE_MANDATORY_IE_MISSING;
@@ -191,10 +195,6 @@ uint8_t smf_5gc_n4_handle_session_establishment_response(
 
     if (cause_value != OGS_PFCP_CAUSE_REQUEST_ACCEPTED)
         return cause_value;
-
-    if (ogs_pfcp_self()->usageLoggerState.enabled) {
-        log_start_usage_reports(sess);
-    }
 
     for (i = 0; i < OGS_MAX_NUM_OF_PDR; i++) {
         pdr = ogs_pfcp_handle_created_pdr(
