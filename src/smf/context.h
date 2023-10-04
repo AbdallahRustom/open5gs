@@ -130,6 +130,10 @@ typedef struct smf_ue_s {
     uint8_t imeisv[OGS_MAX_IMEISV_LEN];
     int imeisv_len;
     char  imeisv_bcd[OGS_MAX_IMEISV_BCD_LEN+1];
+ 
+    /* Timezone */
+    uint8_t timezone_raw[OGS_MAX_TIMEZONE_RAW_LEN];
+    int timezone_raw_len;
     
     ogs_list_t sess_list;
 } smf_ue_t;
