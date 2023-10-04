@@ -29,7 +29,7 @@
 #include "fd-path.h"
 
 static void log_usage_reports(smf_sess_t *sess, ogs_pfcp_session_report_request_t *pfcp_req);
-// static void log_deletion_usage_reports(smf_sess_t *sess, ogs_pfcp_session_deletion_response_t *pfcp_rsp);
+static void log_deletion_usage_reports(smf_sess_t *sess, ogs_pfcp_session_deletion_response_t *pfcp_rsp);
 static void log_start_usage_reports(smf_sess_t *sess);
 static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* event, uint64_t octets_in, uint64_t octets_out);
 static void log_usage_logger_data(UsageLoggerData usageLoggerData);
