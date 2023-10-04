@@ -34,7 +34,7 @@ static void log_deletion_usage_reports(smf_sess_t *sess, ogs_pfcp_session_deleti
 static void log_start_usage_reports(smf_sess_t *sess);
 static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* event, uint64_t octets_in, uint64_t octets_out);
 static void log_usage_logger_data(UsageLoggerData usageLoggerData);
-static bool hex_array_to_string(uint8_t* hex_array, size_t hex_array_len, char* hex_string, size_t hex_string_len);
+// static bool hex_array_to_string(uint8_t* hex_array, size_t hex_array_len, char* hex_string, size_t hex_string_len);
 static bool ogs_ip_to_string(const ogs_ip_t* ip, char* buffer, size_t buffer_size);
 static bool ogs_time_to_string(const ogs_time_t* time_value, char* buffer, size_t buffer_size);
 
@@ -1521,18 +1521,18 @@ static void log_usage_logger_data(UsageLoggerData usageLoggerData) {
     }
 }
 
-static bool hex_array_to_string(uint8_t* hex_array, size_t hex_array_len, char* hex_string, size_t hex_string_len) {
-    int i;
-    for (i = 0; i < hex_array_len; i++) {
-        if (hex_string_len < i) {
-            return false;
-        }
+// static bool hex_array_to_string(uint8_t* hex_array, size_t hex_array_len, char* hex_string, size_t hex_string_len) {
+//     int i;
+//     for (i = 0; i < hex_array_len; i++) {
+//         if (hex_string_len < i) {
+//             return false;
+//         }
         
-        sprintf(hex_string + (i * 2), "%02X", hex_array[i]);
-    }
+//         sprintf(hex_string + (i * 2), "%02X", hex_array[i]);
+//     }
 
-    return true;
-}
+//     return true;
+// }
 
 // Convert ogs_ip_t to a string
 static bool ogs_ip_to_string(const ogs_ip_t* ip, char* buffer, size_t buffer_size) {
@@ -1551,16 +1551,17 @@ static bool ogs_time_to_string(const ogs_time_t* time_value, char* buffer, size_
     if (time_value == NULL || buffer == NULL || buffer_size == 0) {
         return false; // Handle invalid input
     }
-    const char* format = "%Y-%m-%d %H:%M:%S"; // Adjust the format as needed
+    const char* format = "%H:%M:%S"; // Adjust the format as needed
     // Convert time to string with a specific format
     time_t time_seconds = (time_t)(*time_value);
     struct tm tm_info;
+
     if (gmtime_r(&time_seconds, &tm_info) == NULL) {
         return false; // Error in conversion
     }
     if (strftime(buffer, buffer_size, format, &tm_info)) {
         return true;
-    } else {
-        return false; // Error in conversion
-    }
+    } 
+
+    return true;
 }
