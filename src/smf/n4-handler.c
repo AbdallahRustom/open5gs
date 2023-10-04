@@ -1493,13 +1493,13 @@ static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* eve
     strncpy(usageLoggerData.msisdn_bcd, smf_ue->msisdn_bcd, MSISDN_BCD_STR_MAX_LEN);
     strncpy(usageLoggerData.imeisv_bcd, smf_ue->imeisv_bcd, IMEISV_BCD_STR_MAX_LEN);
 
-    if (!hex_array_to_string(smf_ue->timezone_raw, smf_ue->timezone_raw_len, usageLoggerData.timezone_raw, TIMEZONE_RAW_STR_MAX_LEN)) {
+    if (!hex_array_to_string(sess->ue_location_timestamp, usageLoggerData.timezone_raw, TIMEZONE_RAW_STR_MAX_LEN)) {
        ogs_error("Failed to convert raw timezone bytes to timezone hex string!");
     }
     usageLoggerData.plmn = ogs_plmn_id_hexdump(&sess->e_tai.plmn_id);
     usageLoggerData.tac = sess->e_tai.tac;
     usageLoggerData.eci = sess->e_cgi.cell_id;
-    if (!hex_array_to_string(smf_ue->ue_ip_raw, smf_ue->ue_ip_raw_len, usageLoggerData.ue_ip, IP_STR_MAX_LEN)) {
+    if (!!ogs_ip_to_string(&sess->gnb_n3_ip,  usageLoggerData.ue_ip, IP_STR_MAX_LEN)) {
        ogs_error("Failed to convert raw IP bytes to IP hex string!");
     }
     if (!ogs_ip_to_string(&sess->sgw_s5c_ip, usageLoggerData.sgw_ip, IP_STR_MAX_LEN)) {
