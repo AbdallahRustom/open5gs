@@ -131,6 +131,18 @@ typedef struct smf_ue_s {
     int imeisv_len;
     char  imeisv_bcd[OGS_MAX_IMEISV_BCD_LEN+1];
 
+    /* Timezone */
+    uint8_t timezone_raw[OGS_MAX_TIMEZONE_RAW_LEN];
+    int timezone_raw_len;
+
+    /* UE IP */
+    uint8_t ue_ip_raw[OGS_MAX_IP_RAW_LEN];
+    int ue_ip_raw_len;
+
+        /* PGW IP */
+    uint8_t pgw_ip_raw[OGS_MAX_IP_RAW_LEN];
+    int pgw_ip_raw_len;
+
     ogs_list_t sess_list;
 } smf_ue_t;
 

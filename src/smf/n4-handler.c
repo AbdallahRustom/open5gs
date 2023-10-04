@@ -33,7 +33,7 @@ static void log_deletion_usage_reports(smf_sess_t *sess, ogs_pfcp_session_deleti
 static void log_start_usage_reports(smf_sess_t *sess);
 static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* event, uint64_t octets_in, uint64_t octets_out);
 static void log_usage_logger_data(UsageLoggerData usageLoggerData);
-// static bool hex_array_to_string(uint8_t* hex_array, size_t hex_array_len, char* hex_string, size_t hex_string_len);
+static bool hex_array_to_string(uint8_t* hex_array, size_t hex_array_len, char* hex_string, size_t hex_string_len);
 
 uint8_t gtp_cause_from_pfcp(uint8_t pfcp_cause, uint8_t gtp_version)
 {
@@ -1491,20 +1491,20 @@ static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* eve
     strncpy(usageLoggerData.msisdn_bcd, smf_ue->msisdn_bcd, MSISDN_BCD_STR_MAX_LEN);
     strncpy(usageLoggerData.imeisv_bcd, smf_ue->imeisv_bcd, IMEISV_BCD_STR_MAX_LEN);
 
-    //if (!hex_array_to_string(smf_ue->timezone_raw, smf_ue->timezone_raw_len, usageLoggerData.timezone_raw, TIMEZONE_RAW_STR_MAX_LEN)) {
-    //    ogs_error("Failed to convert raw timezone bytes to timezone hex string!");
-    //}
+    if (!hex_array_to_string(smf_ue->timezone_raw, smf_ue->timezone_raw_len, usageLoggerData.timezone_raw, TIMEZONE_RAW_STR_MAX_LEN)) {
+       ogs_error("Failed to convert raw timezone bytes to timezone hex string!");
+    }
     usageLoggerData.plmn = ogs_plmn_id_hexdump(&sess->e_tai.plmn_id);
     usageLoggerData.tac = sess->e_tai.tac;
     usageLoggerData.eci = sess->e_cgi.cell_id;
-    //if (!hex_array_to_string(sgwc_ue->ue_ip_raw, sgwc_ue->ue_ip_raw_len, usageLoggerData.ue_ip, IP_STR_MAX_LEN)) {
-    //    ogs_error("Failed to convert raw IP bytes to IP hex string!");
-    //}
-    //if (!hex_array_to_string(sgwc_ue->pgw_ip_raw, sgwc_ue->pgw_ip_raw_len, usageLoggerData.//pgw_ip, IP_STR_MAX_LEN)) {
-    //    ogs_error("Failed to convert raw IP bytes to IP hex string!");
-    //}
-    //ogs_assert(OGS_ADDRSTRLEN < IP_STR_MAX_LEN);
-    // OGS_ADDR(sess->smf_ue, usageLoggerData.ue_ip);
+    if (!hex_array_to_string(smf_ue->ue_ip_raw, smf_ue->ue_ip_raw_len, usageLoggerData.ue_ip, IP_STR_MAX_LEN)) {
+       ogs_error("Failed to convert raw IP bytes to IP hex string!");
+    }
+    if (!hex_array_to_string(smf_ue->pgw_ip_raw, smf_ue->pgw_ip_raw_len, usageLoggerData.pgw_ip, IP_STR_MAX_LEN)) {
+       ogs_error("Failed to convert raw IP bytes to IP hex string!");
+    }
+    ogs_assert(OGS_ADDRSTRLEN < IP_STR_MAX_LEN);
+    OGS_ADDR(sess->smf_ue, usageLoggerData.ue_ip);
     OGS_ADDR(ogs_gtp_self()->gtpc_addr, usageLoggerData.pgw_ip);
 
     return usageLoggerData;
@@ -1519,18 +1519,18 @@ static void log_usage_logger_data(UsageLoggerData usageLoggerData) {
     }
 }
 
-// static bool hex_array_to_string(uint8_t* hex_array, size_t hex_array_len, char* hex_string, size_t hex_string_len) {
-//     int i;
-//     for (i = 0; i < hex_array_len; i++) {
-//         if (hex_string_len < i) {
-//             return false;
-//         }
+static bool hex_array_to_string(uint8_t* hex_array, size_t hex_array_len, char* hex_string, size_t hex_string_len) {
+    int i;
+    for (i = 0; i < hex_array_len; i++) {
+        if (hex_string_len < i) {
+            return false;
+        }
         
-//         sprintf(hex_string + (i * 2), "%02X", hex_array[i]);
-//     }
+        sprintf(hex_string + (i * 2), "%02X", hex_array[i]);
+    }
 
-//     return true;
-// }
+    return true;
+}
 
 
 
