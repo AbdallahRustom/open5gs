@@ -27,6 +27,7 @@
 #include "sbi-path.h"
 #include "ngap-path.h"
 #include "fd-path.h"
+#include <arpa/inet.h>
 
 static void log_usage_reports(smf_sess_t *sess, ogs_pfcp_session_report_request_t *pfcp_req);
 static void log_deletion_usage_reports(smf_sess_t *sess, ogs_pfcp_session_deletion_response_t *pfcp_rsp);
@@ -34,6 +35,7 @@ static void log_start_usage_reports(smf_sess_t *sess);
 static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* event, uint64_t octets_in, uint64_t octets_out);
 static void log_usage_logger_data(UsageLoggerData usageLoggerData);
 static bool hex_array_to_string(uint8_t* hex_array, size_t hex_array_len, char* hex_string, size_t hex_string_len);
+static bool ogs_ip_to_string(const ogs_ip_t* ip, char* buffer, size_t buffer_size);
 
 uint8_t gtp_cause_from_pfcp(uint8_t pfcp_cause, uint8_t gtp_version)
 {
@@ -1500,8 +1502,8 @@ static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* eve
     if (!hex_array_to_string(smf_ue->ue_ip_raw, smf_ue->ue_ip_raw_len, usageLoggerData.ue_ip, IP_STR_MAX_LEN)) {
        ogs_error("Failed to convert raw IP bytes to IP hex string!");
     }
-    if (!hex_array_to_string(smf_ue->SGW_ip_raw, smf_ue->SGW_ip_raw_len, usageLoggerData.sgw_ip, IP_STR_MAX_LEN)) {
-       ogs_error("Failed to convert raw IP bytes to IP hex string!");
+    if (!ogs_ip_to_string(&sess->sgw_s5c_ip, usageLoggerData.sgw_ip, IP_STR_MAX_LEN)) {
+       ogs_error("Failed to convert ogs IP bytes to string!");
     }
     ogs_assert(OGS_ADDRSTRLEN < IP_STR_MAX_LEN);
     OGS_ADDR(ogs_gtp_self()->gtpc_addr, usageLoggerData.pgw_ip);
@@ -1528,6 +1530,18 @@ static bool hex_array_to_string(uint8_t* hex_array, size_t hex_array_len, char* 
         sprintf(hex_string + (i * 2), "%02X", hex_array[i]);
     }
 
+    return true;
+}
+
+// Convert ogs_ip_t to a string
+static bool ogs_ip_to_string(const ogs_ip_t* ip, char* buffer, size_t buffer_size) {
+    if (ip == NULL || buffer == NULL || buffer_size == 0) {
+        return false; // Handle invalid input
+    }
+
+    if (inet_ntop(AF_INET, &(ip->addr), buffer, buffer_size) == NULL) {
+        return false; // Error in conversion
+    }
     return true;
 }
 
