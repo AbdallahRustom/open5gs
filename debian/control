@@ -1,0 +1,16 @@
+Source: osmo-epdg
+Maintainer: Osmocom team <openbsc@lists.osmocom.org>
+Section: net
+Priority: optional
+Build-Depends: erlang-nox,
+	libpcap-dev,
+	rebar3,
+	debhelper (>= 10)
+Standards-Version: 4.5.0
+
+Package: osmo-epdg
+Architecture: any
+Depends: erlang-nox
+Multi-Arch: allowed
+Description: Osmocom ePDG (Evolved Packet Data Gateway)
+

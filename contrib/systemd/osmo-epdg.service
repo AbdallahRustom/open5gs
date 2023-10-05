@@ -1,0 +1,16 @@
+[Unit]
+Description=Osmocom DIAMETER to GSUP translator
+After=osmo-hlr.service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Restart=always
+Environment="HOME=/var/lib/osmo-epdg"
+ExecStartPre=/usr/bin/mkdir -p /var/lib/osmo-epdg
+ExecStart=/usr/bin/osmo-epdg
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

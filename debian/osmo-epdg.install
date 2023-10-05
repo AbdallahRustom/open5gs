@@ -1,0 +1,2 @@
+/contrib/systemd/osmo-epdg.service /lib/systemd/system/
+/_build/default/bin/osmo-epdg /usr/bin/
