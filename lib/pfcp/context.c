@@ -376,6 +376,7 @@ int ogs_pfcp_context_parse_config(const char *local, const char *remote)
                                 enabled = false;
                             }
                             self.usageLoggerState.enabled = enabled;
+                            ogs_info("Value of self.usageLoggerState.enabled: %s", self.usageLoggerState.enabled ? "true" : "false");
                         } else if (!strcmp(cdr_key, "file_capture_period_sec")) {
                             int file_capture_period_sec = 0;
                             const char *file_capture_period_sec_str = ogs_yaml_iter_value(&cdr_iter);

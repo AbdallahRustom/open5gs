@@ -176,6 +176,7 @@ uint8_t smf_5gc_n4_handle_session_establishment_response(
 
     if (ogs_pfcp_self()->usageLoggerState.enabled) {
         ogs_error("usageloggerstate is enabled");
+        ogs_info("Value of self.usageLoggerState.enabled: %s", ogs_pfcp_self()->usageLoggerState.enabled ? "true" : "false");
         log_start_usage_reports(sess);
     }
     
