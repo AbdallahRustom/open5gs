@@ -1,0 +1,10 @@
+_build/
+include/
+log/
+
+*.beam
+erl_crash.dump
+
+src/diameter_3gpp*
+src/diameter_rfc*
+src/diameter_etsi*
