@@ -175,9 +175,9 @@ uint8_t smf_5gc_n4_handle_session_establishment_response(
 
     ogs_pfcp_xact_commit(xact);
 
-    // if (ogs_pfcp_self()->usageLoggerState.enabled) {
-    //     log_start_usage_reports(sess);
-    // }
+    if (ogs_pfcp_self()->usageLoggerState.enabled) {
+        log_start_usage_reports(sess);
+    }
     
     if (rsp->up_f_seid.presence == 0) {
         ogs_error("No UP F-SEID");
