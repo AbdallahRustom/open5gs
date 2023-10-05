@@ -1,5 +1,5 @@
 %-*- mode: erlang -*-
-{application, epdg,
+{application, osmo_epdg,
   [
 	{description, "ePDG"},
 	{vsn, "1"},

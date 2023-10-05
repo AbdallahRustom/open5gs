@@ -1,0 +1,32 @@
+{"1.2.0",
+[{<<"epcap">>,
+  {git,"https://github.com/msantos/epcap",
+       {ref,"d5c03caf608c1369e68cfed0a606d3eb82ddfd21"}},
+  1},
+ {<<"goldrush">>,{pkg,<<"goldrush">>,<<"0.1.9">>},1},
+ {<<"lager">>,
+  {git,"https://github.com/erlang-lager/lager",
+       {ref,"459a3b2cdd9eadd29e5a7ce5c43932f5ccd6eb88"}},
+  0},
+ {<<"osmo_gsup">>,
+  {git,"https://gitea.osmocom.org/erlang/osmo_gsup",
+       {ref,"ee15ee2b44f4a57c57831393d1fed2dc215d36e4"}},
+  0},
+ {<<"osmo_ss7">>,
+  {git,"https://gitea.osmocom.org/erlang/osmo_ss7",
+       {ref,"3c6cdc5a53c4a5ec1aff417f2cbfaa9449004ee6"}},
+  0},
+ {<<"parse_trans">>,
+  {git,"https://github.com/uwiger/parse_trans",
+       {ref,"cdb01ba260ba9a00b2aafa17affead0f6fac081c"}},
+  1},
+ {<<"pkt">>,
+  {git,"https://github.com/msantos/pkt",
+       {ref,"67a4a14f596fded5ad5f2d8f94318faa8ad2c288"}},
+  1}]}.
+[
+{pkg_hash,[
+ {<<"goldrush">>, <<"F06E5D5F1277DA5C413E84D5A2924174182FB108DABB39D5EC548B27424CD106">>}]},
+{pkg_hash_ext,[
+ {<<"goldrush">>, <<"99CB4128CFFCB3227581E5D4D803D5413FA643F4EB96523F77D9E6937D994CEB">>}]}
+].
