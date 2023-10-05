@@ -28,6 +28,7 @@
 #include "ngap-path.h"
 #include "fd-path.h"
 #include <arpa/inet.h>
+#include "usage_logger.h"
 
 static void log_usage_reports(smf_sess_t *sess, ogs_pfcp_session_report_request_t *pfcp_req);
 static void log_deletion_usage_reports(smf_sess_t *sess, ogs_pfcp_session_deletion_response_t *pfcp_rsp);
@@ -175,8 +176,7 @@ uint8_t smf_5gc_n4_handle_session_establishment_response(
     ogs_pfcp_xact_commit(xact);
 
     if (ogs_pfcp_self()->usageLoggerState.enabled) {
-        ogs_error("usageloggerstate is enabled");
-        ogs_info("Value of self.usageLoggerState.enabled: %s", ogs_pfcp_self()->usageLoggerState.enabled ? "true" : "false");
+        ogs_info("usageloggerstate is enabled");
         log_start_usage_reports(sess);
     }
     
