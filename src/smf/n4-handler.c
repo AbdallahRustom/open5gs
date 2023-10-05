@@ -176,7 +176,6 @@ uint8_t smf_5gc_n4_handle_session_establishment_response(
     ogs_pfcp_xact_commit(xact);
 
     if (ogs_pfcp_self()->usageLoggerState.enabled) {
-        ogs_info("usageloggerstate is enabled");
         log_start_usage_reports(sess);
     }
     
@@ -757,6 +756,11 @@ uint8_t smf_epc_n4_handle_session_establishment_response(
     ogs_debug("Session Establishment Response [epc]");
 
     ogs_pfcp_xact_commit(xact);
+
+    if (ogs_pfcp_self()->usageLoggerState.enabled) {
+        ogs_info("usageloggerstate is enabled");
+        log_start_usage_reports(sess);
+    }
 
     if (rsp->up_f_seid.presence == 0) {
         ogs_error("No UP F-SEID");
@@ -1495,7 +1499,11 @@ static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* eve
     strcpy(usageLoggerData.charging_id, "<charging_id placeholder>");
     strncpy(usageLoggerData.msisdn_bcd, smf_ue->msisdn_bcd, MSISDN_BCD_STR_MAX_LEN);
     strncpy(usageLoggerData.imeisv_bcd, smf_ue->imeisv_bcd, IMEISV_BCD_STR_MAX_LEN);
-    if (!hex_array_to_string(sess->gtp.ue_timezone.data, sess->gtp.ue_timezone.len, usageLoggerData.timezone_raw, TIMEZONE_RAW_STR_MAX_LEN)) {
+    // if (!hex_array_to_string(sess->gtp.ue_timezone.data, sess->gtp.ue_timezone.len, usageLoggerData.timezone_raw, TIMEZONE_RAW_STR_MAX_LEN)) {
+    //     ogs_error("Failed to convert raw timezone bytes to timezone hex string!");
+    // }
+
+    if (!hex_array_to_string(smf_ue->timezone_raw, smf_ue->timezone_raw_len, usageLoggerData.timezone_raw, TIMEZONE_RAW_STR_MAX_LEN)) {
         ogs_error("Failed to convert raw timezone bytes to timezone hex string!");
     }
     usageLoggerData.plmn = ogs_plmn_id_hexdump(&sess->e_tai.plmn_id);
