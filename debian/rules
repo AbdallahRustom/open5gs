@@ -8,10 +8,8 @@ export ERL_COMPILER_OPTIONS=deterministic
 	dh $@
 
 override_dh_auto_build:
-	dh_auto_build
 	if [ -e build_dep.tar.gz ] ; then tar xzf ./build_dep.tar.gz ; fi
-	rebar3 compile
-	rebar3 escriptize
+	dh_auto_build
 	rebar3 eunit
 
 override_dh_clean:
