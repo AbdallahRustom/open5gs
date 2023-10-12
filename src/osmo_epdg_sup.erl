@@ -19,4 +19,9 @@ init([]) ->
 		      5000,
 		      worker,
 		      [gsup_server]},
-	{ok, { {one_for_all, 5, 10}, [DiaServer, GsupServer]} }.
+	AuthHandler = {auth_handler, {auth_handler, start_link, []},
+		       permanent,
+		       5000,
+		       worker,
+		       [auth_handler]},
+	{ok, { {one_for_all, 5, 10}, [DiaServer, GsupServer, AuthHandler]} }.

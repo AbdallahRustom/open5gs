@@ -140,8 +140,7 @@ handle_info({ipa_tcp_accept, Socket}, S) ->
 
 % send auth info / requesting authentication tuples
 handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := send_auth_info_req, imsi := Imsi}}, S) ->
-	Auth = {error, 'not_implemented_yet!'},
-	%Auth = auth_handler:auth_request(Imsi),
+	Auth = auth_handler:auth_request(Imsi),
 	case Auth of
 		{ok, Mar} ->	SipAuthTuples = Mar#'MAA'.'SIP-Auth-Data-Item',
 				% AuthTuples = dia_sip2gsup(SipAuthTuples),
