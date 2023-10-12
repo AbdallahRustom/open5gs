@@ -67,16 +67,16 @@ init([Address, Port, Options]) ->
 	% register the GSUP codec with the IPA core; ignore result as we mgiht be doing this multiple times
 	ipa_proto:register_codec(?IPAC_PROTO_EXT_GSUP, fun gsup_protocol:encode/1, fun gsup_protocol:decode/1),
 	lager:info("GSUP Server on IP ~s port ~p~n", [Address, Port]),
-        CcmOptions = #ipa_ccm_options{
-                serial_number="EPDG-00-00-00-00-00-00",
-                unit_id="0/0/0",
-                mac_address="00:00:00:00:00:00",
-                location="00:00:00:00:00:00",
-                unit_type="00:00:00:00:00:00",
-                equipment_version="00:00:00:00:00:00",
-                sw_version="00:00:00:00:00:00",
-                unit_name="EPDG-00-00-00-00-00-00"
-                },
+	CcmOptions = #ipa_ccm_options{
+		serial_number="EPDG-00-00-00-00-00-00",
+		unit_id="0/0/0",
+		mac_address="00:00:00:00:00:00",
+		location="00:00:00:00:00:00",
+		unit_type="00:00:00:00:00:00",
+		equipment_version="00:00:00:00:00:00",
+		sw_version="00:00:00:00:00:00",
+		unit_name="EPDG-00-00-00-00-00-00"
+	},
 	case ipa_proto:start_listen(Port, 1, Options) of
 		{ok, {Socket, IpaPid}} ->
 			ipa_proto:set_ccm_options(Socket, CcmOptions),
