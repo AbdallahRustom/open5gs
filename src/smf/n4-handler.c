@@ -1513,7 +1513,7 @@ static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* eve
        ogs_error("Failed to convert ogs IP bytes to string!");
     }
     ogs_assert(OGS_ADDRSTRLEN < IP_STR_MAX_LEN);
-    OGS_ADDR(ogs_gtp_self()->gtpu_addr, usageLoggerData.pgw_ip);
+    OGS_ADDR(ogs_gtp_self()->gtpc_addr, usageLoggerData.pgw_ip);
 
     return usageLoggerData;
 }
