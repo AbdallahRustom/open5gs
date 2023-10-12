@@ -104,6 +104,7 @@ start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
 peer_down(API, SvcName, {PeerRef, _} = Peer) ->
+    % fixme: why do we still have ets here?
     (catch ets:delete(?MODULE, {API, PeerRef})),
     gen_server:cast(?SERVER, {peer_down, SvcName, Peer}),
     ok.
@@ -131,7 +132,32 @@ server_assignment_request(IMSI, Type, APN) ->
     gen_server:call(?SERVER,
                           {sar, {IMSI, Type, APN}}).
 
+result_code_success(2001) -> ok;
+result_code_success(2002) -> ok;
+result_code_success(_) -> invalid_result_code.
+
 % TODO Sync failure
+
+-define (MAA_Errors(), #{
+    invalid_result_code => #{error => "Unknown result code"},
+    invalid_exp_result => #{error => "Unknown experimental result code"},
+    unknown_user => #{error => "User is not known by HSS"}
+}).
+
+-spec parse_mar(#'MAA'{}) -> map().
+parse_mar(#'MAA'{'Result-Code' = [ResultCode]} = Maa) ->
+    Success = result_code_success(ResultCode),
+    {Success, ResultCode};
+
+parse_mar(#'MAA'{'Experimental-Result' = [#{'Vendor-Code' := ?VENDOR_ID_3GPP, 'ExpResultCode' := 5001}]} = Maa) ->
+    {unknown_user, 5001};
+parse_mar(#'MAA'{'Experimental-Result' = [#{'Vendor-Code' := ?VENDOR_ID_3GPP, 'ExpResultCode' := ResultCode}]} = Maa) ->
+    {invalid_exp_result, ResultCode};
+parse_mar(Maa) ->
+    {unknown_err, []}.
+
+% parse_mar(#'MAA'{'Experimental-Result-Code' = [ResultCode] = MAA) ->
+
 handle_call({mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey}}, _From, State) ->
     SessionId = diameter:session_id(application:get_env(?SERVER, origin_host, "aaa.example.org")),
     MAR = #'MAR'{'Vendor-Specific-Application-Id' = #'Vendor-Specific-Application-Id'{
@@ -168,8 +194,12 @@ handle_call({sar, {IMSI, Type, APN}}, _From, State) ->
                 },
     Ret = diameter:call(?SVC_NAME, ?APP_ALIAS, SAR, []),
     case Ret of
-        {ok, SAA} ->
-            {reply, {ok, SAA}, State};
+        {ok, Maa} ->
+            SuccessCode = parse_mar(Maa),
+            case SuccessCode of
+                    {ok, _} -> {reply, {ok, Maa}, State};
+                    {Err, Info} -> {reply, {error, {Err, Info, Maa}}, State}
+                end;
         {error, Err} ->
             lager:error("Error: ~w~n", [Err]),
             {reply, {error, Err}, State}
