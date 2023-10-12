@@ -12,6 +12,6 @@
 			osmo_gsup,
 			osmo_ss7
 			]},
-	{mod, {epdg_app, []}},
+	{mod, {osmo_epdg_app, []}},
 	{env, []}
 ]}.
