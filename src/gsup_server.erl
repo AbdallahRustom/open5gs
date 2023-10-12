@@ -32,24 +32,37 @@
 % for the parts of the runtime libraries of Erlang/OTP used as well as
 % that of the covered work.
 
--module(gsup_client).
+-module(gsup_server).
 
 -behaviour(gen_server).
 
--include_lib("osmo_gsup/include/gsup_protocol.hrl").
+-include_lib("diameter_3gpp_ts29_273_swx.hrl").
 -include_lib("osmo_ss7/include/ipa.hrl").
 
 -define(IPAC_PROTO_EXT_GSUP,	{osmo, 5}).
 
--record(gsupc_state, {
-	  	socket,
-		ipa_pid
-	 }).
+-record(gsups_state, {
+	lsocket, % listening socket
+	lport, % local port. only interesting if we bind with port 0
+	socket, % current active socket. we only support a single tcp connection
+	ccm_options % ipa ccm options
+	}).
 
 -export([start_link/3]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3, terminate/2]).
+
+% TODO: -spec dia_sip2gsup('SIP-Auth-Data-Item'()) -> #'GSUPAuthTuple'{}.
+dia_sip2gsup(#'SIP-Auth-Data-Item'{'SIP-Authenticate' = [Authenticate], 'SIP-Authorization' = [Authorization],
+				   'Confidentiality-Key' = [CKey], 'Integrity-Key' = [IKey]}) ->
+	lager:info("dia_sip2gsup: auth ~p authz ~p ~n", [Authenticate, Authorization]),
+	lager:info("  rand ~p autn ~p ~n", [lists:sublist(Authenticate, 1, 16), lists:sublist(Authenticate, 17, 16)]),
+	#{rand => list_to_binary(lists:sublist(Authenticate, 1, 16)),
+	  autn=> list_to_binary(lists:sublist(Authenticate, 17, 16)),
+	  res=> list_to_binary(Authorization),
+	  ik=> list_to_binary(IKey),
+	  ck=> list_to_binary(CKey)}.
 
 %% ------------------------------------------------------------------
 %% our exported API
@@ -78,21 +91,20 @@ init([Address, Port, Options]) ->
 		unit_name="EPDG-00-00-00-00-00-00"
 	},
 	case ipa_proto:start_listen(Port, 1, Options) of
-		{ok, {Socket, IpaPid}} ->
-			ipa_proto:set_ccm_options(Socket, CcmOptions),
+		{ok, LSocket, Port} ->
 			lager:info("connected!~n", []),
-			true = ipa_proto:register_stream(Socket, ?IPAC_PROTO_EXT_GSUP, {process_id, self()}),
-			% ipa_proto:unblock(Socket),
-			{ok, #gsupc_state{socket=Socket, ipa_pid=IpaPid}};
+			{ok, #gsups_state{lsocket = LSocket, lport = Port, ccm_options = CcmOptions}};
 		{error, econnrefused} ->
 			timer:sleep(5000),
-			{stop, connrefused}
+			{stop, connrefused};
+		{error, Reason} ->
+			timer:sleep(5000),
+			{stop, Reason}
 	end.
-
 
 % send a given GSUP message and synchronously wait for message type ExpRes or ExpErr
 handle_call({transceive_gsup, GsupMsgTx, ExpRes, ExpErr}, _From, State) ->
-	Socket = State#gsupc_state.socket,
+	Socket = State#gsups_state.socket,
 	{ok, Imsi} = maps:find(imsi, GsupMsgTx),
 	ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgTx),
 	% selective receive for only those GSUP responses we expect
@@ -110,9 +122,54 @@ handle_cast(Info, S) ->
 	error_logger:error_report(["unknown handle_cast", {module, ?MODULE}, {info, Info}, {state, S}]),
 	{noreply, S}.
 
+% When the IPA connection is closed.
 handle_info({ipa_closed, _}, S) ->
 	lager:error("GSUP connection has been closed, supervisor should reconnect us"),
-	{stop, ipa_closed, S};
+	{noreply, S};
+
+% FIXME: handle multiple concurrent connection well
+% When a new IPA connection arrives
+handle_info({ipa_tcp_accept, Socket}, S) ->
+	lager:notice("GSUP connection has been established"),
+	ipa_proto:register_socket(Socket),
+	ipa_proto:set_ccm_options(Socket, S#gsups_state.ccm_options),
+	true = ipa_proto:register_stream(Socket, ?IPAC_PROTO_EXT_GSUP, {process_id, self()}),
+	ipa_proto:unblock(Socket),
+	lager:info("connected!~n", []),
+	{noreply, S#gsups_state{socket=Socket}};
+
+% send auth info / requesting authentication tuples
+handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := send_auth_info_req, imsi := Imsi}}, S) ->
+	Auth = {error, 'not_implemented_yet!'},
+	%Auth = auth_handler:auth_request(Imsi),
+	case Auth of
+		{ok, Mar} ->	SipAuthTuples = Mar#'MAA'.'SIP-Auth-Data-Item',
+				% AuthTuples = dia_sip2gsup(SipAuthTuples),
+				Resp = #{message_type => send_auth_info_res,
+					 message_class => 5,
+					 imsi => list_to_binary(Mar#'MAA'.'User-Name'),
+					 auth_tuples => lists:map(fun dia_sip2gsup/1, SipAuthTuples)
+					};
+		{error, _} ->	Resp = #{message_type => send_auth_info_err, imsi => Imsi, message_class => 5, cause => 16#11}
+	end,
+	lager:info("auth tuples: ~p ~n", [Resp]),
+	ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp),
+	{noreply, S};
+
+% location update request / when a UE wants to connect to a specific APN. This will trigger a AAA->HLR Request Server Assignment Request
+handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := location_upd_req, imsi := Imsi}}, S) ->
+	Resp = #{message_type => location_upd_res,
+		 imsi => Imsi,
+		 message_class => 5
+		 },
+	ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp),
+	{noreply, S};
+
+% epdg tunnel request / trigger the establishment to the PGW and prepares everything for the user traffic to flow
+% When sending a epdg_tunnel_response everything must be ready for the UE traffic
+handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := epdg_tunnel_request, imsi := Imsi}}, S) ->
+	{noreply, S};
+
 handle_info(Info, S) ->
 	error_logger:error_report(["unknown handle_info", {module, ?MODULE}, {info, Info}, {state, S}]),
 	{noreply, S}.
