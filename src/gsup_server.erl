@@ -156,11 +156,21 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := se
 	{noreply, S};
 
 % location update request / when a UE wants to connect to a specific APN. This will trigger a AAA->HLR Request Server Assignment Request
+% FIXME: add APN instead of hardcoded internet
 handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := location_upd_req, imsi := Imsi}}, S) ->
-	Resp = #{message_type => location_upd_res,
-		 imsi => Imsi,
-		 message_class => 5
-		 },
+	% FIXME: use enum for Server-Assignment-Type => REGISTERING
+	Result = epdg_diameter_swx:server_assignment_request(Imsi, 1, "internet"),
+	case Result of
+		{ok, Sar} ->	Resp = #{message_type => location_upd_res,
+					 imsi => Imsi,
+					 message_class => 5
+					 };
+		{error, _} ->	Resp = #{message_type => location_upd_err,
+					 imsi => Imsi,
+					 message_class => 5,
+					 cause => 16#11 % FIXME: Use proper defines as cause code and use Network failure
+					 }
+	end,
 	ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp),
 	{noreply, S};
 
