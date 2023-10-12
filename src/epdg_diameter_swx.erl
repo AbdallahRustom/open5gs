@@ -68,27 +68,26 @@
 %% supporting multiple Diameter applications may or may not want to
 %% configure a common callback module on all applications.
 -define(SERVICE,
-                [{'Origin-Host', application:get_env(?SERVER, origin_host, "aaa.example.org")},
-                 {'Origin-Realm', application:get_env(?SERVER, origin_realm, "realm.example.org")},
-                 {'Vendor-Id', application:get_env(?SERVER, vendor_id, 0)},
-                 {'Vendor-Specific-Application-Id',
-                        [#'diameter_base_Vendor-Specific-Application-Id'{
-                         'Vendor-Id'           = ?VENDOR_ID_3GPP,
-                         'Auth-Application-Id' = [?DIAMETER_APP_ID_SWX]}]},
-                 {'Product-Name', "osmo-epdg"},
-                 % TODO: check which we should annouce here as Supported-Vendor-Id
-                 {'Supported-Vendor-Id', [?VENDOR_ID_3GPP, ?VENDOR_ID_ETSI, ?VENDOR_ID_3GPP2]},
-                 { application,
-					 [
-						{alias, ?APP_ALIAS},
-						{dictionary, ?DIAMETER_DICT_SWX},
-						{module, ?CALLBACK_MOD},
-						{answer_errors, callback}]}]).
+        [{'Origin-Host', application:get_env(?SERVER, origin_host, "aaa.example.org")},
+         {'Origin-Realm', application:get_env(?SERVER, origin_realm, "realm.example.org")},
+         {'Vendor-Id', application:get_env(?SERVER, vendor_id, 0)},
+         {'Vendor-Specific-Application-Id',
+                [#'diameter_base_Vendor-Specific-Application-Id'{
+                 'Vendor-Id'           = ?VENDOR_ID_3GPP,
+                 'Auth-Application-Id' = [?DIAMETER_APP_ID_SWX]}]},
+         {'Product-Name', "osmo-epdg"},
+         % TODO: check which we should annouce here as Supported-Vendor-Id
+         {'Supported-Vendor-Id', [?VENDOR_ID_3GPP, ?VENDOR_ID_ETSI, ?VENDOR_ID_3GPP2]},
+         { application,
+          [{alias, ?APP_ALIAS},
+           {dictionary, ?DIAMETER_DICT_SWX},
+           {module, ?CALLBACK_MOD},
+           {answer_errors, callback}]}]).
 
 -record(state, {
         handlers,
         peers = #{}
-           }).
+}).
 
 %% @doc starts gen_server implementation process
 -spec start() -> ok | {error, term()}.
