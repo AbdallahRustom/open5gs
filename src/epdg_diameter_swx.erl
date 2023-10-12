@@ -59,6 +59,14 @@
 -define(APP_ALIAS, ?MODULE).
 -define(CALLBACK_MOD, epdg_diameter_swx_cb).
 -define(DIAMETER_DICT_SWX, diameter_3gpp_ts29_273_swx).
+-define(ENV_APP_NAME, osmo_epdg).
+-define(ENV_DEFAULT_SESSION_ID, "epdg@localdomain").
+-define(ENV_DEFAULT_ORIG_REALM, "localdomain").
+-define(ENV_DEFAULT_ORIG_HOST, "epdg.localdomain").
+-define(ENV_DEFAULT_VENDOR_ID, 0).
+-define(ENV_DEFAULT_DIAMETER_PROTO, sctp).
+-define(ENV_DEFAULT_DIAMETER_REMOTE_IP, "127.0.0.1").
+-define(ENV_DEFAULT_DIAMETER_REMOTE_PORT, 3868).
 
 -define(VENDOR_ID_3GPP, 10415).
 -define(VENDOR_ID_3GPP2, 5535).
@@ -68,9 +76,9 @@
 %% supporting multiple Diameter applications may or may not want to
 %% configure a common callback module on all applications.
 -define(SERVICE,
-        [{'Origin-Host', application:get_env(?SERVER, origin_host, "aaa.example.org")},
-         {'Origin-Realm', application:get_env(?SERVER, origin_realm, "realm.example.org")},
-         {'Vendor-Id', application:get_env(?SERVER, vendor_id, 0)},
+        [{'Origin-Host', application:get_env(?ENV_APP_NAME, origin_host, ?ENV_DEFAULT_ORIG_HOST)},
+         {'Origin-Realm', application:get_env(?ENV_APP_NAME, origin_realm, ?ENV_DEFAULT_ORIG_REALM)},
+         {'Vendor-Id', application:get_env(?ENV_APP_NAME, vendor_id, ?ENV_DEFAULT_VENDOR_ID)},
          {'Vendor-Specific-Application-Id',
                 [#'diameter_base_Vendor-Specific-Application-Id'{
                  'Vendor-Id'           = ?VENDOR_ID_3GPP,
@@ -110,9 +118,9 @@ peer_down(API, SvcName, {PeerRef, _} = Peer) ->
     ok.
 
 init(State) ->
-    Proto = application:get_env(?SERVER, diameter_proto, sctp),
-    Ip = application:get_env(?SERVER, diameter_server_ip, "192.168.56.132"),
-    Port = application:get_env(?SERVER, diameter_port, 3868),
+    Proto = application:get_env(?ENV_APP_NAME, diameter_proto, ?ENV_DEFAULT_DIAMETER_PROTO),
+    Ip = application:get_env(?ENV_APP_NAME, diameter_remote_ip, ?ENV_DEFAULT_DIAMETER_REMOTE_IP),
+    Port = application:get_env(?ENV_APP_NAME, diameter_remote_port, ?ENV_DEFAULT_DIAMETER_REMOTE_PORT),
     ok = diameter:start_service(?MODULE, ?SERVICE),
     % lager:info("DiaServices is ~p~n", [DiaServ]),
     {ok, _} = connect({address, Proto, Ip, Port}),
@@ -159,7 +167,7 @@ parse_mar(Maa) ->
 % parse_mar(#'MAA'{'Experimental-Result-Code' = [ResultCode] = MAA) ->
 
 handle_call({mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey}}, _From, State) ->
-    SessionId = diameter:session_id(application:get_env(?SERVER, origin_host, "aaa.example.org")),
+    SessionId = diameter:session_id(application:get_env(?ENV_APP_NAME, origin_host, ?ENV_DEFAULT_ORIG_HOST)),
     MAR = #'MAR'{'Vendor-Specific-Application-Id' = #'Vendor-Specific-Application-Id'{
                     'Vendor-Id'           = ?VENDOR_ID_3GPP,
                     'Auth-Application-Id' = [?DIAMETER_APP_ID_SWX]},
@@ -182,7 +190,7 @@ handle_call({mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey}}, _F
             {reply, {error, Err}, State}
     end;
 handle_call({sar, {IMSI, Type, APN}}, _From, State) ->
-    SessionId = diameter:session_id(application:get_env(?SERVER, origin_host, "aaa.example.org")),
+    SessionId = diameter:session_id(application:get_env(?ENV_APP_NAME, origin_host, ?ENV_DEFAULT_ORIG_HOST)),
     SAR = #'SAR'{'Vendor-Specific-Application-Id' = #'Vendor-Specific-Application-Id'{
                     'Vendor-Id'           = ?VENDOR_ID_3GPP,
                     'Auth-Application-Id' = [?DIAMETER_APP_ID_SWX]},
@@ -236,6 +244,7 @@ terminate(_Reason, _State) ->
 
 %% connect/2
 connect(Name, {address, Protocol, IPAddr, Port}) ->
+    lager:notice("~s connecting to IP ~s port ~p~n", [Name, IPAddr, Port]),
     {ok, IP} = inet_parse:address(IPAddr),
     TransportOpts =
         [{transport_module, tmod(Protocol)},
