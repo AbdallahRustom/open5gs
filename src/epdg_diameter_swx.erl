@@ -152,19 +152,28 @@ result_code_success(_) -> invalid_result_code.
     unknown_user => #{error => "User is not known by HSS"}
 }).
 
--spec parse_mar(#'MAA'{}) -> map().
-parse_mar(#'MAA'{'Result-Code' = [ResultCode]} = Maa) ->
+-spec parse_maa(#'MAA'{}) -> map().
+parse_maa(#'MAA'{'Result-Code' = [ResultCode]} = Maa) ->
     Success = result_code_success(ResultCode),
     {Success, ResultCode};
-
-parse_mar(#'MAA'{'Experimental-Result' = [#{'Vendor-Code' := ?VENDOR_ID_3GPP, 'ExpResultCode' := 5001}]} = Maa) ->
+parse_maa(#'MAA'{'Experimental-Result' = [#{'Vendor-Code' := ?VENDOR_ID_3GPP, 'ExpResultCode' := 5001}]} = Maa) ->
     {unknown_user, 5001};
-parse_mar(#'MAA'{'Experimental-Result' = [#{'Vendor-Code' := ?VENDOR_ID_3GPP, 'ExpResultCode' := ResultCode}]} = Maa) ->
+parse_maa(#'MAA'{'Experimental-Result' = [#{'Vendor-Code' := ?VENDOR_ID_3GPP, 'ExpResultCode' := ResultCode}]} = Maa) ->
     {invalid_exp_result, ResultCode};
-parse_mar(Maa) ->
+parse_maa(Maa) ->
     {unknown_err, []}.
+% parse_maa(#'MAA'{'Experimental-Result-Code' = [ResultCode] = MAA) ->
 
-% parse_mar(#'MAA'{'Experimental-Result-Code' = [ResultCode] = MAA) ->
+-spec parse_saa(#'SAA'{}) -> map().
+parse_saa(#'SAA'{'Result-Code' = [ResultCode]} = Saa) ->
+    Success = result_code_success(ResultCode),
+    {Success, ResultCode};
+parse_saa(#'SAA'{'Experimental-Result' = [#{'Vendor-Code' := ?VENDOR_ID_3GPP, 'ExpResultCode' := 5001}]} = Saa) ->
+    {unknown_user, 5001};
+parse_saa(#'SAA'{'Experimental-Result' = [#{'Vendor-Code' := ?VENDOR_ID_3GPP, 'ExpResultCode' := ResultCode}]} = Saa) ->
+    {invalid_exp_result, ResultCode};
+parse_saa(Saa) ->
+    {unknown_err, []}.
 
 handle_call({mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey}}, _From, State) ->
     SessionId = diameter:session_id(application:get_env(?ENV_APP_NAME, origin_host, ?ENV_DEFAULT_ORIG_HOST)),
@@ -184,11 +193,16 @@ handle_call({mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey}}, _F
     Ret = diameter:call(?SVC_NAME, ?APP_ALIAS, MAR, []),
     case Ret of
         {ok, MAA} ->
-            {reply, {ok, MAA}, State};
+            SuccessCode = parse_maa(MAA),
+            case SuccessCode of
+                    {ok, _} -> {reply, {ok, MAA}, State};
+                    {Err, Info} -> {reply, {error, {Err, Info, MAA}}, State}
+                end;
         {error, Err} ->
             lager:error("Error: ~w~n", [Err]),
             {reply, {error, Err}, State}
     end;
+
 handle_call({sar, {IMSI, Type, APN}}, _From, State) ->
     SessionId = diameter:session_id(application:get_env(?ENV_APP_NAME, origin_host, ?ENV_DEFAULT_ORIG_HOST)),
     SAR = #'SAR'{'Vendor-Specific-Application-Id' = #'Vendor-Specific-Application-Id'{
@@ -202,11 +216,11 @@ handle_call({sar, {IMSI, Type, APN}}, _From, State) ->
                 },
     Ret = diameter:call(?SVC_NAME, ?APP_ALIAS, SAR, []),
     case Ret of
-        {ok, Maa} ->
-            SuccessCode = parse_mar(Maa),
+        {ok, Saa} ->
+            SuccessCode = parse_saa(Saa),
             case SuccessCode of
-                    {ok, _} -> {reply, {ok, Maa}, State};
-                    {Err, Info} -> {reply, {error, {Err, Info, Maa}}, State}
+                    {ok, _} -> {reply, {ok, Saa}, State};
+                    {Err, Info} -> {reply, {error, {Err, Info, Saa}}, State}
                 end;
         {error, Err} ->
             lager:error("Error: ~w~n", [Err]),
