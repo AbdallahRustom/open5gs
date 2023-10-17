@@ -8,6 +8,7 @@
 			kernel,
 			stdlib,
 			lager,
+			gtplib,
 			diameter,
 			osmo_gsup,
 			osmo_ss7

@@ -177,6 +177,23 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := lo
 % epdg tunnel request / trigger the establishment to the PGW and prepares everything for the user traffic to flow
 % When sending a epdg_tunnel_response everything must be ready for the UE traffic
 handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := epdg_tunnel_request, imsi := Imsi}}, S) ->
+	lager:info("GSUP: Rx ~p~n", [GsupMsgRx]),
+	Result = epdg_gtpc_s2b:create_session_req(Imsi),
+	case Result of
+		{ok, _} ->
+			Resp = #{message_type => epdg_tunnel_result,
+				 imsi => Imsi,
+				 message_class => 5
+				};
+		{error, _} ->
+			Resp = #{message_type => epdg_tunnel_error,
+				 imsi => Imsi,
+				 message_class => 5,
+				 cause => 16#11 % FIXME: Use proper defines as cause code and use Network failure
+				}
+	end,
+	lager:info("GSUP: Tx ~p~n", [Resp]),
+	ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp),
 	{noreply, S};
 
 handle_info(Info, S) ->
