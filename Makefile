@@ -5,7 +5,7 @@ build:
 	rebar3 escriptize
 
 run: build
-	_build/default/bin/osmo-epdg
+	ERL_FLAGS='-config config/sys.config' _build/default/bin/osmo-epdg
 
 check:
 	rebar3 eunit
