@@ -32,7 +32,7 @@ In the erlang shell:
 
 == Configuration ==
 
-$ rebar3 shell --config ./examples/sys.config
+$ rebar3 shell --config ./config/sys.config
 ```
 1> osmo_epdg:start().
 ```
