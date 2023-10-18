@@ -7,6 +7,9 @@ build:
 run: build
 	ERL_FLAGS='-config config/sys.config' _build/default/bin/osmo-epdg
 
+shell: build
+	rebar3 shell --config ./config/sys.config
+
 check:
 	rebar3 eunit
 
