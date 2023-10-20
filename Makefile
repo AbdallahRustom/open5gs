@@ -14,4 +14,12 @@ check:
 	rebar3 eunit
 
 clean:
+# Avoid running rebar3 clean if _build doesn't exist, since it would try
+# to fetch deps from the Internet and that may not be avaialble when in
+# OBS build.
+ifneq ("$(wildcard _build/.*)", "")
+	rebar3 clean
 	rm -rf _build/
+else
+	rm -f src/diameter_*.erl
+endif
