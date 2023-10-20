@@ -33,7 +33,6 @@
 @vendor 10415 3GPP
 
 @inherits diameter_gen_base_rfc6733
-
 @inherits diameter_3gpp_base
 @inherits diameter_3gpp_break_circles
 @inherits diameter_3gpp_ts29_212
@@ -113,7 +112,7 @@
 		*[ Supported-Features ]
 		*[ AVP ]
 
-;; 8.2.2.2 Push-Profile-Answer 
+;; 8.2.2.2 Push-Profile-Answer
 	PPA ::= < Diameter Header: 305, PXY >
 		< Session-Id >
 		{ Auth-Session-State }
