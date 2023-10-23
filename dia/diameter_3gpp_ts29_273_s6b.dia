@@ -1,0 +1,166 @@
+;;
+;; %CopyrightBegin%
+;;
+;; Copyright (C) 2023 by sysmocom - s.f.m.c. GmbH <info@sysmocom.de>
+;; Author: Pau Espin Pedrol <pespin@sysmocom.de>
+;;
+;; This resembles 3GPP TS 29.273 version 17.6.0 Release 17
+;;
+;; Licensed under the Apache License, Version 2.0 (the "License");
+;; you may not use this file except in compliance with the License.
+;; You may obtain a copy of the License at
+;;
+;;     http://www.apache.org/licenses/LICENSE-2.0
+;;
+;; Unless required by applicable law or agreed to in writing, software
+;; distributed under the License is distributed on an "AS IS" BASIS,
+;; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+;; See the License for the specific language governing permissions and
+;; limitations under the License.
+;;
+;; %CopyrightEnd%
+;;
+
+;;
+;; Edits:
+;;
+;;
+
+
+@id     16777272
+@name   diameter_3gpp_ts29_273_s6b
+;;@prefix diameter_3gpp
+@vendor 10415 3GPP
+
+@inherits diameter_gen_base_rfc6733
+@inherits diameter_3gpp_base
+@inherits diameter_3gpp_break_circles
+@inherits diameter_3gpp_ts29_212
+@inherits diameter_3gpp_ts29_214
+@inherits diameter_3gpp_ts29_229
+@inherits diameter_3gpp_ts29_272
+@inherits diameter_3gpp_ts29_273
+@inherits diameter_3gpp_ts32_299
+@inherits diameter_etsi_es283_034
+@inherits diameter_rfc4006_cc
+@inherits diameter_rfc5447
+@inherits diameter_rfc5580
+@inherits diameter_rfc5777
+@inherits diameter_rfc5778
+@inherits diameter_rfc7683
+@inherits diameter_rfc7944
+@inherits diameter_rfc8583
+
+@messages
+
+;; 9. S6b
+;; 9.2.2.2.1 AA-Request (AAR)
+
+	AAR ::= < Diameter Header: 265, REQ, PXY >
+		< Session-Id >
+		{ Auth-Application-Id }
+		{ Origin-Host }
+		{ Origin-Realm }
+		{ Destination-Realm }
+		{ Auth-Request-Type }
+		[ User-Name ]
+		[ MIP6-Agent-Info ]
+		[ MIP6-Feature-Vector ]
+		[ Visited-Network-Identifier ]
+		[ QoS-Capability ]
+		[ Service-Selection ]
+		[ OC-Supported-Features ]
+		[ Origination-Time-Stamp ]
+		[ Maximum-Wait-Time ]
+		*[ Supported-Features ]
+		[ Emergency-Services ]
+		*[ AVP ]
+
+;; 9.2.2.2.2 AA-Answer (AAA)
+	AAA ::= < Diameter Header: 265, PXY >
+		< Session-Id >
+		{ Auth-Application-Id }
+		{ Auth-Request-Type }
+		{ Result-Code }
+		{ Origin-Host }
+		{ Origin-Realm }
+		[ MIP6-Feature-Vector ]
+		[ Session-Timeout ]
+		[ APN-Configuration ]
+		[ QoS-Resources ]
+		[ AN-Trusted ]
+		*[ Redirect-Host ]
+		[ Trace-Info ]
+		[ OC-Supported-Features ]
+		[ OC-OLR ]
+		*[ Load ]
+
+;; 9.2.2.3.1 Session-Termination-Request (STR)
+;; 9.2.2.4.3 Session-Termination-Request (STR)
+	STR ::= < Diameter Header: 275, REQ, PXY >
+		< Session-Id >
+		{ Auth-Application-Id }
+		{ Origin-Host }
+		{ Origin-Realm }
+		{ Destination-Realm }
+		{ Termination-Cause }
+		[ User-Name ]
+		[ OC-Supported-Features ]
+		*[ AVP ]
+
+;; 9.2.2.3.2 Session-Termination-Answer (STA)
+;; 9.2.2.4.4 Session-Termination-Answer (STA)
+	STA ::= < Diameter Header: 275, PXY >
+		< Session-Id >
+		{ Result-Code }
+		{ Origin-Host }
+		{ Origin-Realm }
+		[ OC-Supported-Features ]
+		[ OC-OLR ]
+		*[ Load ]
+		*[ AVP ]
+
+;; 9.2.2.4.1 Abort-Session-Request (ASR)
+	ASR ::= < Diameter Header: 274, REQ, PXY >
+		< Session-Id >
+		{ Origin-Host }
+		{ Origin-Realm }
+		{ Destination-Realm }
+		{ Destination-Host }
+		{ Auth-Application-Id }
+		[ User-Name ]
+		[ Auth-Session-State ]
+		*[ AVP ]
+
+;; 9.2.2.4.2 Abort-Session-Answer (ASA)
+	ASA ::= < Diameter Header: 274, PXY >
+		< Session-Id >
+		{ Result-Code }
+		{ Origin-Host }
+		{ Origin-Realm }
+		*[ AVP ]
+
+;; TODO: 9.2.2.5 Commands for S6b MIPv4 FACoA Authorization Procedures
+
+;; 9.2.2.6.1 Re-Auth-Request (RAR)
+	RAR ::= < Diameter Header: 258, REQ, PXY >
+		< Session-Id >
+		{ Origin-Host }
+		{ Origin-Realm }
+		{ Destination-Realm }
+		{ Destination-Host }
+		{ Auth-Application-Id }
+		{ Re-Auth-Request-Type }
+		[ User-Name ]
+		[RAR-Flags ]
+		*[ AVP ]
+
+;; 9.2.2.6.2 Re-Auth-Answer (RAA)
+
+	RAA ::= < Diameter Header: 258, PXY >
+		< Session-Id >
+		{ Result-Code }
+		{ Origin-Host }
+		{ Origin-Realm }
+		[ User-Name ]
+		*[ AVP ]
