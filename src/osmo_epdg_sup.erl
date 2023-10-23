@@ -28,6 +28,11 @@ init([]) ->
 		     5000,
 		     worker,
 		     [epdg_diameter_swx_cb]},
+	DiaS6bServer = {aaa_diameter_s6b, {aaa_diameter_s6b,start_link,[]},
+			permanent,
+			5000,
+			worker,
+			[aaa_diameter_s6b_cb]},
 	GtpcServer = {epdg_gtpc_s2b, {epdg_gtpc_s2b,start_link, [GtpcLocalIp, GtpcLocalPort, GtpcRemoteIp, GtpcRemotePort, []]},
 		      permanent,
 		      5000,
@@ -43,4 +48,4 @@ init([]) ->
 		       5000,
 		       worker,
 		       [auth_handler]},
-	{ok, { {one_for_all, 5, 10}, [DiaServer, GtpcServer, GsupServer, AuthHandler]} }.
+	{ok, { {one_for_all, 5, 10}, [DiaServer, DiaS6bServer, GtpcServer, GsupServer, AuthHandler]} }.
