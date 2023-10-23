@@ -2,7 +2,7 @@
 %
 % TS 29.273
 %
-% (C) 2023 by sysmocom - s.m.f.c. GmbH <info@sysmocom.de>
+% (C) 2023 by sysmocom - s.f.m.c. GmbH <info@sysmocom.de>
 % Author: Alexander Couzens <lynxis@fe80.eu>
 %
 % All Rights Reserved
