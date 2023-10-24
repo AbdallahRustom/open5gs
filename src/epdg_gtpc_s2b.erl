@@ -70,7 +70,9 @@
         rport           :: non_neg_integer(),
         restart_counter :: 0..255,
         seq_no          :: 0..16#ffffffff,
-        sess_list %% TODO: fill it, list of gtp_session
+        next_local_control_tei = 1 :: 0..16#ffffffff,
+        next_local_data_tei = 1 :: 0..16#ffffffff,
+        sessions = sets:new()
 }).
 
 -record(gtp_bearer, {
@@ -134,36 +136,45 @@ create_session_req(Imsi) ->
     gen_server:call(?SERVER,
                           {gtpc_create_session_req, {Imsi}}).
 
-handle_call({gtpc_create_session_req, {Imsi}}, _From, State) ->
-    Sess = new_gtp_session(Imsi, State),
-    Req = gen_create_session_request(Sess, State),
+handle_call({gtpc_create_session_req, {Imsi}}, _From, State0) ->
+    {Sess0, State1} = find_or_new_gtp_session(Imsi, State0),
+    Req = gen_create_session_request(Sess0, State1),
     %TODO: increment State.seq_no.
-    tx_gtp(Req, State),
+    tx_gtp(Req, State1),
     lager:debug("Waiting for CreateSessionResponse~n", []),
     receive
         {udp, _Socket, IP, InPortNo, RxMsg} ->
             try
                 Resp = gtp_packet:decode(RxMsg),
-                logger:info("s2b: Rx from IP ~p port ~n ~p~n", [IP, InPortNo, Resp]),
-                %% TODO: store Sess in State.
-                {reply, {ok, Resp}, State}
+                lager:info("s2b: Rx from IP ~p port ~p ~p~n", [IP, InPortNo, Resp]),
+                Sess1 = update_gtp_session_from_create_session_response(Resp, Sess0),
+                lager:info("s2b: Updated Session after create_session_response: ~p~n", [Sess1]),
+                State2 = update_gtp_session(Sess0, Sess1, State1),
+                {reply, {ok, Resp}, State2}
             catch Any ->
-                logger:error("Error sending message to receiver, ERROR: ~p~n", [Any]),
-                {reply, {error, decode_failure}, State}
+                lager:error("Error sending message to receiver, ERROR: ~p~n", [Any]),
+                {reply, {error, decode_failure}, State1}
             end
         after 5000 ->
-            logger:error("Timeout waiting for CreateSessionResponse for ~p~n", [Req]),
-            {reply, timeout, State}
+            lager:error("Timeout waiting for CreateSessionResponse for ~p~n", [Req]),
+            {reply, timeout, State1}
         end.
 
 %% @callback gen_server
 handle_cast(stop, State) ->
     {stop, normal, State};
-handle_cast(_Req, State) ->
+handle_cast(Req, State) ->
+    lager:info("S2b handle_cast: ~p ~n", [Req]),
     {noreply, State}.
 
 %% @callback gen_server
-handle_info(_Info, State) ->
+handle_info({udp, _Socket, IP, InPortNo, RxMsg}, State) ->
+    lager:info("S2b: Rx from IP ~p port ~p: ~p~n", [IP, InPortNo, RxMsg]),
+    Req = gtp_packet:decode(RxMsg),
+    lager:info("S2b: Rx from IP ~p port ~p: ~p~n", [IP, InPortNo, Req]),
+    rx_gtp(Req, State);
+handle_info(Info, State) ->
+    lager:info("S2b handle_info: ~p ~n", [Info]),
     {noreply, State}.
 
 %% @callback gen_server
@@ -185,6 +196,76 @@ terminate(_Reason, _State) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
+new_gtp_session(Imsi, State) ->
+    % TODO: find non-used local TEI inside State
+    Bearer = #gtp_bearer{
+        ebi = 5,
+        local_data_tei = State#gtp_state.next_local_data_tei
+    },
+    Sess = #gtp_session{imsi = Imsi,
+        apn = ?APN,
+        local_control_tei = State#gtp_state.next_local_control_tei,
+        bearer = Bearer
+    },
+    NewSt = State#gtp_state{next_local_control_tei = State#gtp_state.next_local_control_tei + 1,
+                            next_local_data_tei = State#gtp_state.next_local_data_tei + 1,
+                            sessions = sets:add_element(Sess, State#gtp_state.sessions)},
+    {Sess, NewSt}.
+
+% returns Sess if found, undefined it not
+find_gtp_session_by_imsi(Imsi, State) ->
+    sets:fold(
+        fun(SessIt = #gtp_session{imsi = Imsi}, _AccIn) -> SessIt;
+           (_, AccIn) -> AccIn
+        end,
+        undefined,
+        State#gtp_state.sessions).
+
+find_or_new_gtp_session(Imsi, State) ->
+    Sess = find_gtp_session_by_imsi(Imsi, State),
+    case Sess of
+        #gtp_session{imsi = Imsi} ->
+            {Sess, State};
+        undefined ->
+            new_gtp_session(Imsi, State)
+    end.
+
+update_gtp_session(OldSess, NewSess, State) ->
+    SetRemoved = sets:del_element(OldSess, State#gtp_state.sessions),
+    SetUpdated = sets:add_element(NewSess, SetRemoved),
+    State#gtp_state{sessions = SetUpdated}.
+
+delete_gtp_session(Sess, State) ->
+    SetRemoved = sets:del_element(Sess, State#gtp_state.sessions),
+    State#gtp_state{sessions = SetRemoved}.
+
+update_gtp_session_from_create_session_response_ie(none, Sess) ->
+    Sess;
+update_gtp_session_from_create_session_response_ie({_,
+                                                    #v2_fully_qualified_tunnel_endpoint_identifier{
+                                                        interface_type = _Interface,
+                                                        key = TEI, ipv4 = _IP4, ipv6 = _IP6},
+                                                    Next}, Sess) ->
+    update_gtp_session_from_create_session_response_ie(maps:next(Next), Sess#gtp_session{remote_control_tei = TEI});
+update_gtp_session_from_create_session_response_ie({_, _, Next},
+                                                   Sess) ->
+    update_gtp_session_from_create_session_response_ie(maps:next(Next), Sess).
+
+update_gtp_session_from_create_session_response_ies(#gtp{ie = IEs}, Sess) ->
+    update_gtp_session_from_create_session_response_ie(maps:next(maps:iterator(IEs)), Sess).
+
+update_gtp_session_from_create_session_response(Resp = #gtp{version = v2, type = create_session_response}, Sess) ->
+    update_gtp_session_from_create_session_response_ies(#gtp{ie = Resp#gtp.ie}, Sess).
+
+% returns Sess if found, undefined it not
+find_gtp_session_by_local_teic(LocalControlTei, State) ->
+    sets:fold(
+        fun(SessIt = #gtp_session{local_control_tei = LocalControlTei}, _AccIn) -> SessIt;
+            (_, AccIn) -> AccIn
+        end,
+        undefined,
+        State#gtp_state.sessions).
+
 %% connect/2
 connect(Name, {Socket, RemoteAddr, RemotePort}) ->
     lager:info("~s connecting to IP ~s port ~p~n", [Name, RemoteAddr, RemotePort]),
@@ -193,22 +274,26 @@ connect(Name, {Socket, RemoteAddr, RemotePort}) ->
 connect(Address) ->
     connect(?SVC_NAME, Address).
 
+rx_gtp(Req = #gtp{version = v2, type = delete_bearer_request}, State) ->
+    Sess = find_gtp_session_by_local_teic(Req#gtp.tei, State),
+    case Sess of
+        undefined ->
+            lager:error("Rx unknown TEI ~p: ~p~n", [Req#gtp.tei, Req]),
+            {noreply, State};
+        Sess ->
+            Resp = gen_delete_bearer_response(Req, Sess, request_accepted, State),
+            tx_gtp(Resp, State),
+            State1 = delete_gtp_session(Sess, State),
+            {noreply, State1}
+        end;
+rx_gtp(Req, State) ->
+    lager:error("S2b: UNIMPLEMENTED Rx: ~p~n", [Req]),
+    {noreply, State}.
+
 tx_gtp(Req, State) ->
     lager:info("s2b: Tx ~p~n", [Req]),
     Msg = gtp_packet:encode(Req),
     gen_udp:send(State#gtp_state.socket, State#gtp_state.raddr, State#gtp_state.rport, Msg).
-
-new_gtp_session(Imsi, _State) ->
-    % TODO: find non-used local TEI inside State
-    Bearer = #gtp_bearer{
-        ebi = 5,
-        local_data_tei = 1
-    },
-    #gtp_session{imsi = Imsi,
-        apn = ?APN,
-        local_control_tei = 0,
-        bearer = Bearer
-    }.
 
 %% 7.2.1 Create Session Request
 gen_create_session_request(#gtp_session{imsi = Imsi,
@@ -248,5 +333,18 @@ gen_create_session_request(#gtp_session{imsi = Imsi,
             #v2_bearer_context{group = BearersIE}
           ],
     #gtp{version = v2, type = create_session_request, tei = 0, seq_no = SeqNo, ie = IEs}.
+
+gen_delete_bearer_response(Req = #gtp{version = v2, type = delete_bearer_request},
+                           Sess = #gtp_session{remote_control_tei = RemoteCtlTEI},
+                           GtpCause,
+                           #gtp_state{restart_counter = RCnt}) ->
+    IEs = [#v2_recovery{restart_counter = RCnt},
+           #v2_cause{v2_cause = GtpCause}
+          ],
+    #gtp{version = v2,
+         type = delete_bearer_response,
+         tei = RemoteCtlTEI,
+         seq_no = Req#gtp.seq_no,
+         ie = IEs}.
 
 
