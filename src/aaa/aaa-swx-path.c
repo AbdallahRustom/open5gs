@@ -622,26 +622,26 @@ static void aaa_swx_saa_cb(void *data, struct msg **msg)
     }
     
     /* Set the Result-Code */
-    if (result_code == ER_DIAMETER_SUCCESS) {
-        ret = fd_msg_rescode_set(ans, 
-                    (char *)"DIAMETER_SUCCESS", NULL, NULL, 1);
-        ogs_assert(ret == 0);
-    } else if (result_code == OGS_DIAM_AVP_UNSUPPORTED) {
-        ret = fd_msg_rescode_set(ans,
-                    (char *)"DIAMETER_AVP_UNSUPPORTED", NULL, NULL, 1);
-        ogs_assert(ret == 0);
-    } else if (result_code == OGS_DIAM_UNKNOWN_SESSION_ID) {
-        ret = fd_msg_rescode_set(ans,
-                    (char *)"DIAMETER_UNKNOWN_SESSION_ID", NULL, NULL, 1);
-        ogs_assert(ret == 0);
-    } else if (result_code == OGS_DIAM_MISSING_AVP) {
-        ret = fd_msg_rescode_set(ans,
-                    (char *)"DIAMETER_MISSING_AVP", NULL, NULL, 1);
-        ogs_assert(ret == 0);
-    } else {
-        ret = ogs_diam_message_experimental_rescode_set(ans, result_code);
-        ogs_assert(ret == 0);
-    }
+    // if (result_code == ER_DIAMETER_SUCCESS) {
+    ret = fd_msg_rescode_set(ans, 
+                (char *)"DIAMETER_SUCCESS", NULL, NULL, 1);
+    ogs_assert(ret == 0);
+    // } else if (result_code == OGS_DIAM_AVP_UNSUPPORTED) {
+    //     ret = fd_msg_rescode_set(ans,
+    //                 (char *)"DIAMETER_AVP_UNSUPPORTED", NULL, NULL, 1);
+    //     ogs_assert(ret == 0);
+    // } else if (result_code == OGS_DIAM_UNKNOWN_SESSION_ID) {
+    //     ret = fd_msg_rescode_set(ans,
+    //                 (char *)"DIAMETER_UNKNOWN_SESSION_ID", NULL, NULL, 1);
+    //     ogs_assert(ret == 0);
+    // } else if (result_code == OGS_DIAM_MISSING_AVP) {
+    //     ret = fd_msg_rescode_set(ans,
+    //                 (char *)"DIAMETER_MISSING_AVP", NULL, NULL, 1);
+    //     ogs_assert(ret == 0);
+    // } else {
+    //     ret = ogs_diam_message_experimental_rescode_set(ans, result_code);
+    //     ogs_assert(ret == 0);
+    // }
 
     ogs_info("Sending Authentication-Authorization-Answer");
     /* Send the answer */
