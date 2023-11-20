@@ -1,0 +1,17 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "Build with Meson and Ninja",
+			"command": "cd ${workspaceFolder} && meson build --prefix=/open5gs/install && ninja -C build",
+			"group": "build"
+		},
+		{
+			"type": "shell",
+			"label": "Test with Meson",
+			"command": "cd ${workspaceFolder}/build && meson test -v",
+			"group": "test"
+		}
+	]
+}
