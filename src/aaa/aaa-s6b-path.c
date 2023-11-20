@@ -202,6 +202,10 @@ static int aaa_s6b_aar_cb( struct msg **msg, struct avp *avp,
     ret = fd_sess_state_store(aaa_s6b_reg, sess, &sess_data);
     ogs_assert(ret == 0);
     ogs_assert(sess_data == NULL);
+
+    /* Set the Result-Code to indicate success */
+    ret = fd_msg_rescode_set(ans, (char *)"DIAMETER_SUCCESS", NULL, NULL, 1);
+    ogs_assert(ret == 0);
     
 
     /*************** Send Server-Assignment-Request ***************/
