@@ -59,6 +59,9 @@
 
 %% TODO: make APN configurable? get it from HSS?
 -define(APN, <<"internet">>).
+-define(MCC, 901).
+-define(MNC, 42).
+-define(MNC_SIZE, 3).
 
 -record(gtp_state, {
         socket,
@@ -330,7 +333,10 @@ gen_create_session_request(#gtp_session{imsi = Imsi,
             #v2_access_point_name{instance = 0, apn = [Apn]},
             #v2_selection_mode{mode = 0},
             #v2_pdn_address_allocation{type = ipv4, address = <<0,0,0,0>>},
-            #v2_bearer_context{group = BearersIE}
+            #v2_bearer_context{group = BearersIE},
+            #v2_serving_network{
+                    plmn_id = gtp_utils:plmn_to_bin(?MCC, ?MNC, ?MNC_SIZE)
+            }
           ],
     #gtp{version = v2, type = create_session_request, tei = 0, seq_no = SeqNo, ie = IEs}.
 
@@ -346,5 +352,3 @@ gen_delete_bearer_response(Req = #gtp{version = v2, type = delete_bearer_request
          tei = RemoteCtlTEI,
          seq_no = Req#gtp.seq_no,
          ie = IEs}.
-
-
