@@ -94,6 +94,7 @@
 		[ OC-Supported-Features ]
 		[ OC-OLR ]
 		*[ Load ]
+		*[ AVP ]
 
 ;; 9.2.2.3.1 Session-Termination-Request (STR)
 ;; 9.2.2.4.3 Session-Termination-Request (STR)
