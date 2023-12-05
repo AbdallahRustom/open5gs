@@ -35,7 +35,16 @@
 -module(gtp_utils).
 -author('Alexander Couzens <lynxis@fe80.eu>').
 
--export([plmn_to_bin/3]).
+-export([ip_to_bin/1, plmn_to_bin/3]).
+
+% ergw_aaa/src/ergw_aaa_3gpp_dict.erl
+% under GPLv2+
+ip_to_bin(IP) when is_binary(IP) ->
+    IP;
+ip_to_bin({A, B, C, D}) ->
+    <<A, B, C, D>>;
+ip_to_bin({A, B, C, D, E, F, G, H}) ->
+    <<A:16, B:16, C:16, D:16, E:16, F:16, G:16, H:16>>.
 
 % ergw/apps/ergw/test/*.erl
 % under GPLv2+

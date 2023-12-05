@@ -318,7 +318,7 @@ gen_create_session_request(#gtp_session{imsi = Imsi,
                     instance = 0,
                     interface_type = 31, %% "S2b-U ePDG GTP-U"
                     key = Bearer#gtp_bearer.local_data_tei,
-                    ipv4 = LocalAddr
+                    ipv4 = gtp_utils:ip_to_bin(LocalAddr)
                   }
                 ],
     IEs = [#v2_recovery{restart_counter = RCnt},
@@ -328,7 +328,7 @@ gen_create_session_request(#gtp_session{imsi = Imsi,
                 instance = Bearer#gtp_bearer.ebi,
                 interface_type = 30, %% "S2b ePDG GTP-C"
                 key = LocalCtlTEI,
-                ipv4 = LocalAddr
+                ipv4 = gtp_utils:ip_to_bin(LocalAddr)
             },
             #v2_access_point_name{instance = 0, apn = [Apn]},
             #v2_selection_mode{mode = 0},
