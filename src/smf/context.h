@@ -91,7 +91,10 @@ typedef struct smf_context_s {
     ogs_hash_t      *smf_n4_seid_hash; /* hash table (SMF-N4-SEID) */
     ogs_hash_t      *n1n2message_hash; /* hash table (N1N2Message Location) */
 
-    uint16_t        mtu;            /* MTU to advertise in PCO */
+    uint16_t        mtu;  
+    
+    bool use_upg;
+    const char* sgi_nwi;          /* MTU to advertise in PCO */
 
     struct  {
         const char *integrity_protection_indication;
