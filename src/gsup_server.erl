@@ -124,7 +124,7 @@ handle_cast(Info, S) ->
 
 % When the IPA connection is closed.
 handle_info({ipa_closed, _}, S) ->
-	lager:error("GSUP connection has been closed, supervisor should reconnect us"),
+	lager:error("GSUP connection has been closed"),
 	{noreply, S};
 
 % FIXME: handle multiple concurrent connection well
