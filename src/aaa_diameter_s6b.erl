@@ -67,6 +67,8 @@
 -define(ENV_DEFAULT_DIAMETER_PROTO, sctp).
 -define(ENV_DEFAULT_DIAMETER_REMOTE_IP, "127.0.0.10").
 -define(ENV_DEFAULT_DIAMETER_REMOTE_PORT, 3868).
+-define(ENV_DEFAULT_DIAMETER_CONNECT_TIMER_MS, 30000).
+-define(ENV_DEFAULT_DIAMETER_WATCHDOG_TIMER_MS, 30000).
 
 -define(VENDOR_ID_3GPP, 10415).
 -define(VENDOR_ID_3GPP2, 5535).
@@ -121,9 +123,11 @@ init(State) ->
     Proto = application:get_env(?ENV_APP_NAME, dia_s6b_proto, ?ENV_DEFAULT_DIAMETER_PROTO),
     Ip = application:get_env(?ENV_APP_NAME, dia_s6b_local_ip, ?ENV_DEFAULT_DIAMETER_REMOTE_IP),
     Port = application:get_env(?ENV_APP_NAME, dia_s6b_local_port, ?ENV_DEFAULT_DIAMETER_REMOTE_PORT),
+    ConnectTimer = application:get_env(?ENV_APP_NAME, dia_s6b_connect_timer, ?ENV_DEFAULT_DIAMETER_CONNECT_TIMER_MS),
+    WatchdogTimer = application:get_env(?ENV_APP_NAME, dia_s6b_watchdog_timer, ?ENV_DEFAULT_DIAMETER_WATCHDOG_TIMER_MS),
     ok = diameter:start_service(?MODULE, ?SERVICE),
     % lager:info("DiaServices is ~p~n", [DiaServ]),
-    {ok, _} = listen({address, Proto, Ip, Port}),
+    {ok, _} = listen({address, Proto, Ip, Port}, {timer, ConnectTimer, WatchdogTimer}),
     {ok, State}.
 
 test() ->
@@ -176,8 +180,7 @@ terminate(_Reason, _State) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-%% connect/2
-listen(Name, {address, Protocol, IPAddr, Port}) ->
+listen(Name, {address, Protocol, IPAddr, Port}, {timer, ConnectTimer, WatchdogTimer}) ->
     lager:notice("~s Listening on IP ~s port ~p~n", [Name, IPAddr, Port]),
     {ok, IP} = inet_parse:address(IPAddr),
     TransportOpts =
@@ -188,11 +191,13 @@ listen(Name, {address, Protocol, IPAddr, Port}) ->
            {port, Port}
            %%{raddr, IP},
            %%{rport, Port}
-          ]}],
-    diameter:add_transport(Name, {listen, [{reconnect_timer, 1000} | TransportOpts]}).
+          ]},
+         {connect_timer, ConnectTimer},
+         {watchdog_timer, WatchdogTimer}],
+    diameter:add_transport(Name, {listen, TransportOpts}).
 
-listen(Address) ->
-    listen(?SVC_NAME, Address).
+listen(Address, Timers) ->
+    listen(?SVC_NAME, Address, Timers).
 
 %% Convert connection type
 tmod(tcp) ->

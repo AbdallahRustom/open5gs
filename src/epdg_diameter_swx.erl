@@ -67,6 +67,8 @@
 -define(ENV_DEFAULT_DIAMETER_PROTO, sctp).
 -define(ENV_DEFAULT_DIAMETER_REMOTE_IP, "127.0.0.1").
 -define(ENV_DEFAULT_DIAMETER_REMOTE_PORT, 3868).
+-define(ENV_DEFAULT_DIAMETER_CONNECT_TIMER_MS, 30000).
+-define(ENV_DEFAULT_DIAMETER_WATCHDOG_TIMER_MS, 30000).
 
 -define(VENDOR_ID_3GPP, 10415).
 -define(VENDOR_ID_3GPP2, 5535).
@@ -121,9 +123,11 @@ init(State) ->
     Proto = application:get_env(?ENV_APP_NAME, diameter_proto, ?ENV_DEFAULT_DIAMETER_PROTO),
     Ip = application:get_env(?ENV_APP_NAME, diameter_remote_ip, ?ENV_DEFAULT_DIAMETER_REMOTE_IP),
     Port = application:get_env(?ENV_APP_NAME, diameter_remote_port, ?ENV_DEFAULT_DIAMETER_REMOTE_PORT),
+    ConnectTimer = application:get_env(?ENV_APP_NAME, diameter_connect_timer, ?ENV_DEFAULT_DIAMETER_CONNECT_TIMER_MS),
+    WatchdogTimer = application:get_env(?ENV_APP_NAME, diameter_watchdog_timer, ?ENV_DEFAULT_DIAMETER_WATCHDOG_TIMER_MS),
     ok = diameter:start_service(?MODULE, ?SERVICE),
     % lager:info("DiaServices is ~p~n", [DiaServ]),
-    {ok, _} = connect({address, Proto, Ip, Port}),
+    {ok, _} = connect({address, Proto, Ip, Port}, {timer, ConnectTimer, WatchdogTimer}),
     {ok, State}.
 
 test() ->
@@ -256,8 +260,8 @@ terminate(_Reason, _State) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-%% connect/2
-connect(Name, {address, Protocol, IPAddr, Port}) ->
+%% connect/3
+connect(Name, {address, Protocol, IPAddr, Port}, {timer, ConnectTimer, WatchdogTimer}) ->
     lager:notice("~s connecting to IP ~s port ~p~n", [Name, IPAddr, Port]),
     {ok, IP} = inet_parse:address(IPAddr),
     TransportOpts =
@@ -265,11 +269,13 @@ connect(Name, {address, Protocol, IPAddr, Port}) ->
          {transport_config,
           [{reuseaddr, true},
            {raddr, IP},
-           {rport, Port}]}],
-    diameter:add_transport(Name, {connect, [{reconnect_timer, 1000} | TransportOpts]}).
+           {rport, Port}]},
+         {connect_timer, ConnectTimer},
+         {watchdog_timer, WatchdogTimer}],
+    diameter:add_transport(Name, {connect, TransportOpts}).
 
-connect(Address) ->
-    connect(?SVC_NAME, Address).
+connect(Address, Timers) ->
+    connect(?SVC_NAME, Address, Timers).
 
 %% Convert connection type
 tmod(tcp) ->
