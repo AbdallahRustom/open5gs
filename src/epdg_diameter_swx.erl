@@ -69,6 +69,7 @@
 -define(ENV_DEFAULT_DIAMETER_REMOTE_PORT, 3868).
 -define(ENV_DEFAULT_DIAMETER_CONNECT_TIMER_MS, 30000).
 -define(ENV_DEFAULT_DIAMETER_WATCHDOG_TIMER_MS, 30000).
+-define(ENV_DEFAULT_DIAMETER_WATCHDOG_CFG, [{okay, 3}, {suspect, 1}]).
 
 -define(VENDOR_ID_3GPP, 10415).
 -define(VENDOR_ID_3GPP2, 5535).
@@ -125,9 +126,10 @@ init(State) ->
     Port = application:get_env(?ENV_APP_NAME, diameter_remote_port, ?ENV_DEFAULT_DIAMETER_REMOTE_PORT),
     ConnectTimer = application:get_env(?ENV_APP_NAME, diameter_connect_timer, ?ENV_DEFAULT_DIAMETER_CONNECT_TIMER_MS),
     WatchdogTimer = application:get_env(?ENV_APP_NAME, diameter_watchdog_timer, ?ENV_DEFAULT_DIAMETER_WATCHDOG_TIMER_MS),
+    WatchdogConfig = application:get_env(?ENV_APP_NAME, diameter_watchdog_config, ?ENV_DEFAULT_DIAMETER_WATCHDOG_CFG),
     ok = diameter:start_service(?MODULE, ?SERVICE),
     % lager:info("DiaServices is ~p~n", [DiaServ]),
-    {ok, _} = connect({address, Proto, Ip, Port}, {timer, ConnectTimer, WatchdogTimer}),
+    {ok, _} = connect({address, Proto, Ip, Port}, {timer, ConnectTimer, WatchdogTimer, WatchdogConfig}),
     {ok, State}.
 
 test() ->
@@ -261,7 +263,7 @@ terminate(_Reason, _State) ->
 %% ------------------------------------------------------------------
 
 %% connect/3
-connect(Name, {address, Protocol, IPAddr, Port}, {timer, ConnectTimer, WatchdogTimer}) ->
+connect(Name, {address, Protocol, IPAddr, Port}, {timer, ConnectTimer, WatchdogTimer, WatchdogConfig}) ->
     lager:notice("~s connecting to IP ~s port ~p~n", [Name, IPAddr, Port]),
     {ok, IP} = inet_parse:address(IPAddr),
     TransportOpts =
@@ -271,7 +273,8 @@ connect(Name, {address, Protocol, IPAddr, Port}, {timer, ConnectTimer, WatchdogT
            {raddr, IP},
            {rport, Port}]},
          {connect_timer, ConnectTimer},
-         {watchdog_timer, WatchdogTimer}],
+         {watchdog_timer, WatchdogTimer},
+         {watchdog_config, WatchdogConfig}],
     diameter:add_transport(Name, {connect, TransportOpts}).
 
 connect(Address, Timers) ->
