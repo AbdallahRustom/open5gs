@@ -92,7 +92,7 @@ init([Address, Port, Options]) ->
 	},
 	case ipa_proto:start_listen(Port, 1, Options) of
 		{ok, LSocket, Port} ->
-			lager:info("connected!~n", []),
+			lager:info("GSUP server listen socket ~p~n", [LSocket]),
 			{ok, #gsups_state{lsocket = LSocket, lport = Port, ccm_options = CcmOptions}};
 		{error, econnrefused} ->
 			timer:sleep(5000),
@@ -135,7 +135,6 @@ handle_info({ipa_tcp_accept, Socket}, S) ->
 	ipa_proto:set_ccm_options(Socket, S#gsups_state.ccm_options),
 	true = ipa_proto:register_stream(Socket, ?IPAC_PROTO_EXT_GSUP, {process_id, self()}),
 	ipa_proto:unblock(Socket),
-	lager:info("connected!~n", []),
 	{noreply, S#gsups_state{socket=Socket}};
 
 % send auth info / requesting authentication tuples
