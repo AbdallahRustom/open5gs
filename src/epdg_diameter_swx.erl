@@ -79,9 +79,9 @@
 %% supporting multiple Diameter applications may or may not want to
 %% configure a common callback module on all applications.
 -define(SERVICE,
-        [{'Origin-Host', application:get_env(?ENV_APP_NAME, origin_host, ?ENV_DEFAULT_ORIG_HOST)},
-         {'Origin-Realm', application:get_env(?ENV_APP_NAME, origin_realm, ?ENV_DEFAULT_ORIG_REALM)},
-         {'Vendor-Id', application:get_env(?ENV_APP_NAME, vendor_id, ?ENV_DEFAULT_VENDOR_ID)},
+        [{'Origin-Host', application:get_env(?ENV_APP_NAME, dia_swx_origin_host, ?ENV_DEFAULT_ORIG_HOST)},
+         {'Origin-Realm', application:get_env(?ENV_APP_NAME, dia_swx_origin_realm, ?ENV_DEFAULT_ORIG_REALM)},
+         {'Vendor-Id', application:get_env(?ENV_APP_NAME, dia_swx_vendor_id, ?ENV_DEFAULT_VENDOR_ID)},
          {'Vendor-Specific-Application-Id',
                 [#'diameter_base_Vendor-Specific-Application-Id'{
                  'Vendor-Id'           = ?VENDOR_ID_3GPP,
@@ -121,12 +121,12 @@ peer_down(API, SvcName, {PeerRef, _} = Peer) ->
     ok.
 
 init(State) ->
-    Proto = application:get_env(?ENV_APP_NAME, diameter_proto, ?ENV_DEFAULT_DIAMETER_PROTO),
-    Ip = application:get_env(?ENV_APP_NAME, diameter_remote_ip, ?ENV_DEFAULT_DIAMETER_REMOTE_IP),
-    Port = application:get_env(?ENV_APP_NAME, diameter_remote_port, ?ENV_DEFAULT_DIAMETER_REMOTE_PORT),
-    ConnectTimer = application:get_env(?ENV_APP_NAME, diameter_connect_timer, ?ENV_DEFAULT_DIAMETER_CONNECT_TIMER_MS),
-    WatchdogTimer = application:get_env(?ENV_APP_NAME, diameter_watchdog_timer, ?ENV_DEFAULT_DIAMETER_WATCHDOG_TIMER_MS),
-    WatchdogConfig = application:get_env(?ENV_APP_NAME, diameter_watchdog_config, ?ENV_DEFAULT_DIAMETER_WATCHDOG_CFG),
+    Proto = application:get_env(?ENV_APP_NAME, dia_swx_proto, ?ENV_DEFAULT_DIAMETER_PROTO),
+    Ip = application:get_env(?ENV_APP_NAME, dia_swx_remote_ip, ?ENV_DEFAULT_DIAMETER_REMOTE_IP),
+    Port = application:get_env(?ENV_APP_NAME, dia_swx_remote_port, ?ENV_DEFAULT_DIAMETER_REMOTE_PORT),
+    ConnectTimer = application:get_env(?ENV_APP_NAME, dia_swx_connect_timer, ?ENV_DEFAULT_DIAMETER_CONNECT_TIMER_MS),
+    WatchdogTimer = application:get_env(?ENV_APP_NAME, dia_swx_watchdog_timer, ?ENV_DEFAULT_DIAMETER_WATCHDOG_TIMER_MS),
+    WatchdogConfig = application:get_env(?ENV_APP_NAME, dia_swx_watchdog_config, ?ENV_DEFAULT_DIAMETER_WATCHDOG_CFG),
     ok = diameter:start_service(?MODULE, ?SERVICE),
     % lager:info("DiaServices is ~p~n", [DiaServ]),
     {ok, _} = connect({address, Proto, Ip, Port}, {timer, ConnectTimer, WatchdogTimer, WatchdogConfig}),
