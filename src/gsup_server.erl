@@ -38,6 +38,8 @@
 
 -include_lib("diameter_3gpp_ts29_273_swx.hrl").
 -include_lib("osmo_ss7/include/ipa.hrl").
+-include_lib("osmo_gsup/include/gsup_protocol.hrl").
+-include_lib("gtplib/include/gtp_packet.hrl").
 
 -define(IPAC_PROTO_EXT_GSUP,	{osmo, 5}).
 
@@ -179,10 +181,22 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := ep
 	lager:info("GSUP: Rx ~p~n", [GsupMsgRx]),
 	Result = epdg_gtpc_s2b:create_session_req(Imsi),
 	case Result of
-		{ok, _} ->
+		{ok, #gtp{version = v2, type = create_session_response}} ->
+			{ok, CreateSessResp} = Result,
+			IEs = CreateSessResp#gtp.ie,
+			%%#{{v2_bearer_context,0} := BearerMap} = IEs,
+			#{{v2_pdn_address_allocation,0} := Paa} = IEs,
+			PdpAddress = #{pdp_type_org => 1, pdp_type_nr => 16#21, address => #{ ipv4 => Paa#v2_pdn_address_allocation.address}},
+			PdpInfo = #{pdp_context_id => 0,
+				    pdp_address => PdpAddress,
+				    access_point_name => "foobar.apn",
+				    quality_of_service => <<0, 0, 0>>,
+				    pdp_charging => 0},
 			Resp = #{message_type => epdg_tunnel_result,
 				 imsi => Imsi,
-				 message_class => 5
+				 message_class => 5,
+				 pdp_info_complete => true,
+				 pdp_info_list => [PdpInfo]
 				};
 		{error, _} ->
 			Resp = #{message_type => epdg_tunnel_error,
