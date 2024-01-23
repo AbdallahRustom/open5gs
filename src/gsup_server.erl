@@ -41,19 +41,28 @@
 -include_lib("osmo_gsup/include/gsup_protocol.hrl").
 -include_lib("gtplib/include/gtp_packet.hrl").
 
+-define(SERVER, ?MODULE).
+
 -define(IPAC_PROTO_EXT_GSUP,	{osmo, 5}).
 
 -record(gsups_state, {
 	lsocket, % listening socket
 	lport, % local port. only interesting if we bind with port 0
 	socket, % current active socket. we only support a single tcp connection
-	ccm_options % ipa ccm options
+	ccm_options, % ipa ccm options
+	ues = sets:new()
+	}).
+
+-record(gsups_ue, {
+	imsi                   :: binary(),
+	pid                    :: pid()
 	}).
 
 -export([start_link/3]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3, terminate/2]).
+-export([auth_response/2, lu_response/2, tunnel_response/2]).
 
 % TODO: -spec dia_sip2gsup('SIP-Auth-Data-Item'()) -> #'GSUPAuthTuple'{}.
 dia_sip2gsup(#'SIP-Auth-Data-Item'{'SIP-Authenticate' = [Authenticate], 'SIP-Authorization' = [Authorization],
@@ -71,7 +80,7 @@ dia_sip2gsup(#'SIP-Auth-Data-Item'{'SIP-Authenticate' = [Authenticate], 'SIP-Aut
 %% ------------------------------------------------------------------
 
 start_link(ServerAddr, ServerPort, Options) ->
-	gen_server:start_link(?MODULE, [ServerAddr, ServerPort, Options], [{debug, [trace]}]).
+	gen_server:start_link({local, ?SERVER}, ?MODULE, [ServerAddr, ServerPort, Options], [{debug, [trace]}]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
@@ -105,20 +114,76 @@ init([Address, Port, Options]) ->
 	end.
 
 % send a given GSUP message and synchronously wait for message type ExpRes or ExpErr
-handle_call({transceive_gsup, GsupMsgTx, ExpRes, ExpErr}, _From, State) ->
-	Socket = State#gsups_state.socket,
-	{ok, Imsi} = maps:find(imsi, GsupMsgTx),
-	ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgTx),
-	% selective receive for only those GSUP responses we expect
-	receive
-		{ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := ExpRes, imsi := Imsi}} ->
-			{reply, GsupMsgRx, State};
+handle_call(Info, _From, State) ->
+	error_logger:error_report(["unknown handle_call", {module, ?MODULE}, {info, Info}, {state, State}]),
+	{reply, error, not_implemented}.
 
-		{ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := ExpErr, imsi := Imsi}} ->
-			{reply, GsupMsgRx, State}
-	after 5000 ->
-		{reply, timeout, State}
-	end.
+handle_cast({auth_response, {Imsi, Auth}}, State) ->
+	lager:info("auth_response for ~p: ~p~n", [Imsi, Auth]),
+	Socket = State#gsups_state.socket,
+	case Auth of
+		{ok, Mar} ->	SipAuthTuples = Mar#'MAA'.'SIP-Auth-Data-Item',
+				% AuthTuples = dia_sip2gsup(SipAuthTuples),
+				Resp = #{message_type => send_auth_info_res,
+					message_class => 5,
+					imsi => list_to_binary(Mar#'MAA'.'User-Name'),
+					auth_tuples => lists:map(fun dia_sip2gsup/1, SipAuthTuples)
+					};
+		{error, _} ->	Resp = #{message_type => send_auth_info_err, imsi => Imsi, message_class => 5, cause => 16#11}
+	end,
+	lager:info("GSUP: Tx ~p~n", [Resp]),
+	ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp),
+	{noreply, State};
+
+handle_cast({lu_response, {Imsi, Result}}, State) ->
+	lager:info("lu_response for ~p: ~p~n", [Imsi, Result]),
+	Socket = State#gsups_state.socket,
+	case Result of
+		{ok, _Sar} ->	Resp = #{message_type => location_upd_res,
+					 imsi => Imsi,
+					 message_class => 5
+					 };
+		{error, _} ->	Resp = #{message_type => location_upd_err,
+					 imsi => Imsi,
+					 message_class => 5,
+					 cause => 16#11 % FIXME: Use proper defines as cause code and use Network failure
+					 }
+	end,
+	lager:info("GSUP: Tx ~p~n", [Resp]),
+	ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp),
+	{noreply, State};
+
+handle_cast({tunnel_response, {Imsi, Result}}, State) ->
+	lager:info("tunnel_response for ~p: ~p~n", [Imsi, Result]),
+	Socket = State#gsups_state.socket,
+	case Result of
+		{ok, #gtp{version = v2, type = create_session_response}} ->
+			{ok, CreateSessResp} = Result,
+			IEs = CreateSessResp#gtp.ie,
+			%%#{{v2_bearer_context,0} := BearerMap} = IEs,
+			#{{v2_pdn_address_allocation,0} := Paa} = IEs,
+			PdpAddress = #{pdp_type_org => 1, pdp_type_nr => 16#21, address => #{ ipv4 => Paa#v2_pdn_address_allocation.address}},
+			PdpInfo = #{pdp_context_id => 0,
+				pdp_address => PdpAddress,
+				access_point_name => "foobar.apn",
+				quality_of_service => <<0, 0, 0>>,
+				pdp_charging => 0},
+			Resp = #{message_type => epdg_tunnel_result,
+				imsi => Imsi,
+				message_class => 5,
+				pdp_info_complete => true,
+				pdp_info_list => [PdpInfo]
+				};
+		{error, _} ->
+			Resp = #{message_type => epdg_tunnel_error,
+				imsi => Imsi,
+				message_class => 5,
+				cause => 16#11 % FIXME: Use proper defines as cause code and use Network failure
+				}
+	end,
+	lager:info("GSUP: Tx ~p~n", [Resp]),
+	ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp),
+	{noreply, State};
 
 handle_cast(Info, S) ->
 	error_logger:error_report(["unknown handle_cast", {module, ?MODULE}, {info, Info}, {state, S}]),
@@ -140,74 +205,47 @@ handle_info({ipa_tcp_accept, Socket}, S) ->
 	{noreply, S#gsups_state{socket=Socket}};
 
 % send auth info / requesting authentication tuples
-handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := send_auth_info_req, imsi := Imsi}}, S) ->
-	Auth = auth_handler:auth_request(Imsi),
-	case Auth of
-		{ok, Mar} ->	SipAuthTuples = Mar#'MAA'.'SIP-Auth-Data-Item',
-				% AuthTuples = dia_sip2gsup(SipAuthTuples),
-				Resp = #{message_type => send_auth_info_res,
-					 message_class => 5,
-					 imsi => list_to_binary(Mar#'MAA'.'User-Name'),
-					 auth_tuples => lists:map(fun dia_sip2gsup/1, SipAuthTuples)
-					};
-		{error, _} ->	Resp = #{message_type => send_auth_info_err, imsi => Imsi, message_class => 5, cause => 16#11}
-	end,
-	lager:info("auth tuples: ~p ~n", [Resp]),
-	ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp),
-	{noreply, S};
+handle_info({ipa, _Socket, ?IPAC_PROTO_EXT_GSUP, _GsupMsgRx = #{message_type := send_auth_info_req, imsi := Imsi}}, State0) ->
+	{UE, State1} = find_or_new_gsups_ue(Imsi, State0),
+	ue_fsm:auth_request(UE#gsups_ue.pid),
+	{noreply, State1};
 
 % location update request / when a UE wants to connect to a specific APN. This will trigger a AAA->HLR Request Server Assignment Request
 % FIXME: add APN instead of hardcoded internet
-handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := location_upd_req, imsi := Imsi}}, S) ->
-	% FIXME: use enum for Server-Assignment-Type => REGISTERING
-	Result = epdg_diameter_swx:server_assignment_request(Imsi, 1, "internet"),
-	case Result of
-		{ok, Sar} ->	Resp = #{message_type => location_upd_res,
-					 imsi => Imsi,
-					 message_class => 5
-					 };
-		{error, _} ->	Resp = #{message_type => location_upd_err,
-					 imsi => Imsi,
-					 message_class => 5,
-					 cause => 16#11 % FIXME: Use proper defines as cause code and use Network failure
-					 }
+handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, _GsupMsgRx = #{message_type := location_upd_req, imsi := Imsi}}, State) ->
+	UE = find_gsups_ue_by_imsi(Imsi, State),
+	case UE of
+		#gsups_ue{imsi = Imsi} ->
+			ue_fsm:lu_request(UE#gsups_ue.pid);
+		undefined ->
+			Resp = #{message_type => location_upd_err,
+				 imsi => Imsi,
+				 message_class => 5,
+				 cause => 16#11 % FIXME: Use proper defines as cause code and use Network failure
+			},
+			lager:info("GSUP: Tx ~p~n", [Resp]),
+			ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp)
 	end,
-	ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp),
-	{noreply, S};
+	{noreply, State};
 
 % epdg tunnel request / trigger the establishment to the PGW and prepares everything for the user traffic to flow
 % When sending a epdg_tunnel_response everything must be ready for the UE traffic
-handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := epdg_tunnel_request, imsi := Imsi}}, S) ->
+handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := epdg_tunnel_request, imsi := Imsi}}, State) ->
 	lager:info("GSUP: Rx ~p~n", [GsupMsgRx]),
-	Result = epdg_gtpc_s2b:create_session_req(Imsi),
-	case Result of
-		{ok, #gtp{version = v2, type = create_session_response}} ->
-			{ok, CreateSessResp} = Result,
-			IEs = CreateSessResp#gtp.ie,
-			%%#{{v2_bearer_context,0} := BearerMap} = IEs,
-			#{{v2_pdn_address_allocation,0} := Paa} = IEs,
-			PdpAddress = #{pdp_type_org => 1, pdp_type_nr => 16#21, address => #{ ipv4 => Paa#v2_pdn_address_allocation.address}},
-			PdpInfo = #{pdp_context_id => 0,
-				    pdp_address => PdpAddress,
-				    access_point_name => "foobar.apn",
-				    quality_of_service => <<0, 0, 0>>,
-				    pdp_charging => 0},
-			Resp = #{message_type => epdg_tunnel_result,
-				 imsi => Imsi,
-				 message_class => 5,
-				 pdp_info_complete => true,
-				 pdp_info_list => [PdpInfo]
-				};
-		{error, _} ->
+	UE = find_gsups_ue_by_imsi(Imsi, State),
+	case UE of
+		#gsups_ue{imsi = Imsi} ->
+			ue_fsm:tunnel_request(UE#gsups_ue.pid);
+		undefined ->
 			Resp = #{message_type => epdg_tunnel_error,
 				 imsi => Imsi,
 				 message_class => 5,
 				 cause => 16#11 % FIXME: Use proper defines as cause code and use Network failure
-				}
+			},
+			lager:info("GSUP: Tx ~p~n", [Resp]),
+			ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp)
 	end,
-	lager:info("GSUP: Tx ~p~n", [Resp]),
-	ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp),
-	{noreply, S};
+	{noreply, State};
 
 handle_info(Info, S) ->
 	error_logger:error_report(["unknown handle_info", {module, ?MODULE}, {info, Info}, {state, S}]),
@@ -218,3 +256,43 @@ terminate(Reason, _S) ->
 
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
+
+auth_response(Imsi, Auth) ->
+	lager:info("auth_response(~p): ~p~n", [Imsi, Auth]),
+	gen_server:cast(?SERVER, {auth_response, {Imsi, Auth}}).
+
+lu_response(Imsi, Result) ->
+	lager:info("lu_response(~p): ~p~n", [Imsi, Result]),
+	gen_server:cast(?SERVER, {lu_response, {Imsi, Result}}).
+
+tunnel_response(Imsi, Result) ->
+	lager:info("tunnel_response(~p): ~p~n", [Imsi, Result]),
+	gen_server:cast(?SERVER, {tunnel_response, {Imsi, Result}}).
+
+%% ------------------------------------------------------------------
+%% Internal Function Definitions
+%% ------------------------------------------------------------------
+
+new_gsups_ue(Imsi, State) ->
+	{ok, Pid} = ue_fsm:start_link(Imsi),
+	UE = #gsups_ue{imsi = Imsi, pid = Pid},
+	NewSt = State#gsups_state{ues = sets:add_element(UE, State#gsups_state.ues)},
+	{UE, NewSt}.
+
+% returns gsups_ue if found, undefined it not
+find_gsups_ue_by_imsi(Imsi, State) ->
+	sets:fold(
+	    fun(UEsIt = #gsups_ue{imsi = Imsi}, _AccIn) -> UEsIt;
+	       (_, AccIn) -> AccIn
+	    end,
+	    undefined,
+	    State#gsups_state.ues).
+
+find_or_new_gsups_ue(Imsi, State) ->
+	UE = find_gsups_ue_by_imsi(Imsi, State),
+	case UE of
+	    #gsups_ue{imsi = Imsi} ->
+		{UE, State};
+	    undefined ->
+		new_gsups_ue(Imsi, State)
+	end.
