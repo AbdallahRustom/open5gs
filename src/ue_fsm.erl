@@ -36,7 +36,7 @@
 
 -export([start_link/1]).
 -export([init/1,callback_mode/0,terminate/3]).
--export([auth_request/1, lu_request/1, tunnel_request/1]).
+-export([auth_request/1, lu_request/1, tunnel_request/1, received_gtpc_create_session_response/2]).
 -export([state_new/3,state_authenticated/3]).
 
 -record(ue_fsm_data, {
@@ -59,6 +59,10 @@ lu_request(Pid) ->
 tunnel_request(Pid) ->
         lager:info("ue_fsm tunnel_request~n", []),
         gen_statem:cast(Pid, tunnel_request).
+
+received_gtpc_create_session_response(Pid, Msg) ->
+        lager:info("ue_fsm received_gtpc_create_session_response ~p~n", [Msg]),
+        gen_statem:cast(Pid, {received_gtpc_create_session_response, Msg}).
 
 init(Imsi) ->
         lager:info("ue_fsm init(~p)~n", [Imsi]),
@@ -96,14 +100,13 @@ state_authenticated(cast, lu_request, Data) ->
 
 state_authenticated(cast, tunnel_request, Data) ->
         lager:info("ue_fsm state_authenticated event=tunnel_request, ~p~n", [Data]),
-        Result = epdg_gtpc_s2b:create_session_req(Data#ue_fsm_data.imsi),
+        epdg_gtpc_s2b:create_session_req(Data#ue_fsm_data.imsi),
+        {keep_state, Data};
+
+state_authenticated(cast, {received_gtpc_create_session_response, Result}, Data) ->
+        lager:info("ue_fsm state_authenticated event=received_gtpc_create_session_response, ~p~n", [Data]),
         gsup_server:tunnel_response(Data#ue_fsm_data.imsi, Result),
-        case Result of
-                {ok, _} ->
-                        {keep_state, Data};
-                {error, Err} ->
-                        {stop, Err, Data}
-        end;
+        {keep_state, Data};
 
 state_authenticated(cast, _Whatever, Data) ->
         lager:info("ue_fsm state_authenticated event=auth_request, ~p~n", [Data]),

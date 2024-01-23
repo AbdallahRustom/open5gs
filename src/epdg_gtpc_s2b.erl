@@ -86,6 +86,7 @@
 
 -record(gtp_session, {
     imsi                   :: binary(),
+    pid                    :: pid(),
     apn                    :: binary(),
     ue_ip                  :: inet:ip_address(),
     local_control_tei = 0  :: non_neg_integer(),
@@ -136,32 +137,15 @@ init(State) ->
     end.
 
 create_session_req(Imsi) ->
-    gen_server:call(?SERVER,
-                          {gtpc_create_session_req, {Imsi}}).
+    gen_server:call(?SERVER, {gtpc_create_session_req, {Imsi}}).
 
-handle_call({gtpc_create_session_req, {Imsi}}, _From, State0) ->
-    {Sess0, State1} = find_or_new_gtp_session(Imsi, State0),
+handle_call({gtpc_create_session_req, {Imsi}}, {Pid, _Tag} = _From, State0) ->
+    {Sess0, State1} = find_or_new_gtp_session(Imsi, Pid, State0),
     Req = gen_create_session_request(Sess0, State1),
     %TODO: increment State.seq_no.
     tx_gtp(Req, State1),
     lager:debug("Waiting for CreateSessionResponse~n", []),
-    receive
-        {udp, _Socket, IP, InPortNo, RxMsg} ->
-            try
-                Resp = gtp_packet:decode(RxMsg),
-                lager:info("s2b: Rx from IP ~p port ~p ~p~n", [IP, InPortNo, Resp]),
-                Sess1 = update_gtp_session_from_create_session_response(Resp, Sess0),
-                lager:info("s2b: Updated Session after create_session_response: ~p~n", [Sess1]),
-                State2 = update_gtp_session(Sess0, Sess1, State1),
-                {reply, {ok, Resp}, State2}
-            catch Any ->
-                lager:error("Error sending message to receiver, ERROR: ~p~n", [Any]),
-                {reply, {error, decode_failure}, State1}
-            end
-        after 5000 ->
-            lager:error("Timeout waiting for CreateSessionResponse for ~p~n", [Req]),
-            {reply, timeout, State1}
-        end.
+    {reply, ok, State1}.
 
 %% @callback gen_server
 handle_cast(stop, State) ->
@@ -199,13 +183,14 @@ terminate(_Reason, _State) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-new_gtp_session(Imsi, State) ->
+new_gtp_session(Imsi, Pid, State) ->
     % TODO: find non-used local TEI inside State
     Bearer = #gtp_bearer{
         ebi = 5,
         local_data_tei = State#gtp_state.next_local_data_tei
     },
     Sess = #gtp_session{imsi = Imsi,
+        pid = Pid,
         apn = ?APN,
         local_control_tei = State#gtp_state.next_local_control_tei,
         bearer = Bearer
@@ -224,13 +209,13 @@ find_gtp_session_by_imsi(Imsi, State) ->
         undefined,
         State#gtp_state.sessions).
 
-find_or_new_gtp_session(Imsi, State) ->
+find_or_new_gtp_session(Imsi, Pid, State) ->
     Sess = find_gtp_session_by_imsi(Imsi, State),
     case Sess of
         #gtp_session{imsi = Imsi} ->
             {Sess, State};
         undefined ->
-            new_gtp_session(Imsi, State)
+            new_gtp_session(Imsi, Pid, State)
     end.
 
 update_gtp_session(OldSess, NewSess, State) ->
@@ -277,6 +262,20 @@ connect(Name, {Socket, RemoteAddr, RemotePort}) ->
 connect(Address) ->
     connect(?SVC_NAME, Address).
 
+rx_gtp(Resp = #gtp{version = v2, type = create_session_response}, State0) ->
+    Sess0 = find_gtp_session_by_local_teic(Resp#gtp.tei, State0),
+    case Sess0 of
+        undefined ->
+            lager:error("Rx unknown TEI ~p: ~p~n", [Resp#gtp.tei, Resp]),
+            {noreply, State0};
+        Sess0 ->
+            Sess1 = update_gtp_session_from_create_session_response(Resp, Sess0),
+            lager:info("s2b: Updated Session after create_session_response: ~p~n", [Sess1]),
+            State1 = update_gtp_session(Sess0, Sess1, State0),
+            ue_fsm:received_gtpc_create_session_response(Sess0#gtp_session.pid, {ok, Resp}),
+            {noreply, State1}
+        end;
+
 rx_gtp(Req = #gtp{version = v2, type = delete_bearer_request}, State) ->
     Sess = find_gtp_session_by_local_teic(Req#gtp.tei, State),
     case Sess of
@@ -289,6 +288,7 @@ rx_gtp(Req = #gtp{version = v2, type = delete_bearer_request}, State) ->
             State1 = delete_gtp_session(Sess, State),
             {noreply, State1}
         end;
+
 rx_gtp(Req, State) ->
     lager:error("S2b: UNIMPLEMENTED Rx: ~p~n", [Req]),
     {noreply, State}.
