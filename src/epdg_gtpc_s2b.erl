@@ -48,7 +48,7 @@
 %% gen_server Function Exports
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3]).
--export([create_session_req/1]).
+-export([create_session_req/1, delete_session_req/1]).
 
 %% Application Definitions
 -define(SERVER, ?MODULE).
@@ -139,13 +139,28 @@ init(State) ->
 create_session_req(Imsi) ->
     gen_server:call(?SERVER, {gtpc_create_session_req, {Imsi}}).
 
+delete_session_req(Imsi) ->
+    gen_server:call(?SERVER, {gtpc_delete_session_req, {Imsi}}).
+
 handle_call({gtpc_create_session_req, {Imsi}}, {Pid, _Tag} = _From, State0) ->
     {Sess0, State1} = find_or_new_gtp_session(Imsi, Pid, State0),
     Req = gen_create_session_request(Sess0, State1),
     %TODO: increment State.seq_no.
     tx_gtp(Req, State1),
     lager:debug("Waiting for CreateSessionResponse~n", []),
-    {reply, ok, State1}.
+    {reply, ok, State1};
+
+handle_call({gtpc_delete_session_req, {Imsi}}, _From, State) ->
+    Sess = find_gtp_session_by_imsi(Imsi, State),
+    case Sess of
+        #gtp_session{imsi = Imsi} ->
+            Req = gen_delete_session_request(Sess, State),
+            %TODO: increment State.seq_no.
+            tx_gtp(Req, State),
+            {reply, ok, State};
+        undefined ->
+            {reply, {error, imsi_unknown}, State}
+    end.
 
 %% @callback gen_server
 handle_cast(stop, State) ->
@@ -276,6 +291,18 @@ rx_gtp(Resp = #gtp{version = v2, type = create_session_response}, State0) ->
             {noreply, State1}
         end;
 
+rx_gtp(Resp = #gtp{version = v2, type = delete_session_response}, State0) ->
+    Sess = find_gtp_session_by_local_teic(Resp#gtp.tei, State0),
+    case Sess of
+        undefined ->
+            lager:error("Rx unknown TEI ~p: ~p~n", [Resp#gtp.tei, Resp]),
+            {noreply, State0};
+        Sess ->
+            State1 = delete_gtp_session(Sess, State0),
+            ue_fsm:received_gtpc_delete_session_response(Sess#gtp_session.pid, Resp),
+            {noreply, State1}
+        end;
+
 rx_gtp(Req = #gtp{version = v2, type = delete_bearer_request}, State) ->
     Sess = find_gtp_session_by_local_teic(Req#gtp.tei, State),
     case Sess of
@@ -339,6 +366,22 @@ gen_create_session_request(#gtp_session{imsi = Imsi,
             }
           ],
     #gtp{version = v2, type = create_session_request, tei = 0, seq_no = SeqNo, ie = IEs}.
+
+%% 7.2.9 Delete Session Request
+gen_delete_session_request(#gtp_session{remote_control_tei = RemoteCtlTEI,
+                                        bearer = Bearer},
+                           #gtp_state{laddr = LocalAddr,
+                                      seq_no = SeqNo}) ->
+    IEs = [#v2_eps_bearer_id{eps_bearer_id = Bearer#gtp_bearer.ebi},
+           #v2_fully_qualified_tunnel_endpoint_identifier{
+               instance = Bearer#gtp_bearer.ebi,
+               interface_type = 30, %% "S2b ePDG GTP-C"
+               key = Bearer#gtp_bearer.local_data_tei,
+               ipv4 = gtp_utils:ip_to_bin(LocalAddr)
+           }
+    ],
+    #gtp{version = v2, type = delete_session_request, tei = RemoteCtlTEI, seq_no = SeqNo, ie = IEs}.
+
 
 gen_delete_bearer_response(Req = #gtp{version = v2, type = delete_bearer_request},
                            Sess = #gtp_session{remote_control_tei = RemoteCtlTEI},

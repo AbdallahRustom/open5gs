@@ -34,10 +34,14 @@
 -behaviour(gen_statem).
 -define(NAME, ue_fsm).
 
+-include_lib("osmo_gsup/include/gsup_protocol.hrl").
+-include_lib("gtplib/include/gtp_packet.hrl").
+
 -export([start_link/1]).
 -export([init/1,callback_mode/0,terminate/3]).
--export([auth_request/1, lu_request/1, tunnel_request/1, received_gtpc_create_session_response/2]).
--export([state_new/3,state_authenticated/3]).
+-export([auth_request/1, lu_request/1, tunnel_request/1, purge_ms_request/1]).
+-export([received_gtpc_create_session_response/2, received_gtpc_delete_session_response/2]).
+-export([state_new/3,state_authenticated/3, state_wait_delete_session_resp/3]).
 
 -record(ue_fsm_data, {
         imsi
@@ -75,6 +79,15 @@ tunnel_request(Pid) ->
                 {error, Err}
         end.
 
+purge_ms_request(Pid) ->
+        lager:info("ue_fsm purge_ms_request~n", []),
+        try
+        gen_statem:call(Pid, purge_ms_request)
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
+
 received_gtpc_create_session_response(Pid, Msg) ->
         lager:info("ue_fsm received_gtpc_create_session_response ~p~n", [Msg]),
         try
@@ -83,6 +96,23 @@ received_gtpc_create_session_response(Pid, Msg) ->
         exit:Err ->
                 {error, Err}
         end.
+
+received_gtpc_delete_session_response(Pid, Msg) ->
+        lager:info("ue_fsm received_gtpc_delete_session_response ~p~n", [Msg]),
+        try
+        gen_statem:call(Pid, {received_gtpc_delete_session_response, Msg})
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
+
+%% ------------------------------------------------------------------
+%% Internal helpers
+%% ------------------------------------------------------------------
+
+%% ------------------------------------------------------------------
+%% gen_statem Function Definitions
+%% ------------------------------------------------------------------
 
 init(Imsi) ->
         lager:info("ue_fsm init(~p)~n", [Imsi]),
@@ -105,7 +135,11 @@ state_new({call, From}, auth_request, Data) ->
                         {next_state, state_authenticated, Data, [{reply,From,ok}]};
 		{error, Err} ->
                         {stop_and_reply, Err, Data, [{reply,From,{error,Err}}]}
-	end.
+	end;
+
+state_new({call, From}, purge_ms_request, Data) ->
+        lager:info("ue_fsm state_new event=purge_ms_request, ~p~n", [Data]),
+        {stop_and_reply, purge_ms_request, Data, [{reply,From,ok}]}.
 
 state_authenticated({call, From}, lu_request, Data) ->
         lager:info("ue_fsm state_authenticated event=lu_request, ~p~n", [Data]),
@@ -128,6 +162,13 @@ state_authenticated({call, From}, {received_gtpc_create_session_response, Result
         gsup_server:tunnel_response(Data#ue_fsm_data.imsi, Result),
         {keep_state, Data, [{reply,From,ok}]};
 
+state_authenticated({call, From}, purge_ms_request, Data) ->
+        lager:info("ue_fsm state_authenticated event=purge_ms_request, ~p~n", [Data]),
+        case epdg_gtpc_s2b:delete_session_req(Data#ue_fsm_data.imsi) of
+        ok -> {next_state, state_wait_delete_session_resp, Data, [{reply,From,ok}]};
+        {error, Err} -> {keep_state, Data, [{reply,From,{error, Err}}]}
+        end;
+
 state_authenticated({call, From}, _Whatever, Data) ->
         lager:error("ue_fsm state_authenticated: Unexpected call event, ~p~n", [Data]),
         {keep_state, Data, [{reply,From,ok}]};
@@ -135,3 +176,19 @@ state_authenticated({call, From}, _Whatever, Data) ->
 state_authenticated(cast, _Whatever, Data) ->
         lager:error("ue_fsm state_authenticated: Unexpected cast event, ~p~n", [Data]),
         {keep_state, Data}.
+
+state_wait_delete_session_resp({call, From}, {received_gtpc_delete_session_response, _Resp = #gtp{version = v2, type = delete_session_response, ie = IEs}}, Data) ->
+        lager:info("ue_fsm state_wait_delete_session_resp event=received_gtpc_delete_session_response, ~p~n", [Data]),
+        #{{v2_cause,0} := CauseIE} = IEs,
+        GtpCause = gtp_utils:enum_v2_cause(CauseIE#v2_cause.v2_cause),
+        GsupCause = conv:cause_gtp2gsup(GtpCause),
+        lager:debug("Cause: GTP_atom=~p -> GTP_int=~p -> GSUP_int=~p~n", [CauseIE#v2_cause.v2_cause, GtpCause, GsupCause]),
+        case GsupCause of
+        0 -> gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, ok);
+        _ -> gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, {error, GsupCause})
+        end,
+        {keep_state, Data, [{reply,From,ok}]};
+
+state_wait_delete_session_resp({call, From}, Event, Data) ->
+        lager:error("ue_fsm state_wait_delete_session_resp: Unexpected call event ~p, ~p~n", [Event, Data]),
+        {keep_state, Data, [{reply,From,{error,unexpected_event}}]}.

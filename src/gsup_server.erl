@@ -62,7 +62,7 @@
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3, terminate/2]).
--export([auth_response/2, lu_response/2, tunnel_response/2]).
+-export([auth_response/2, lu_response/2, tunnel_response/2, purge_ms_response/2]).
 
 % TODO: -spec dia_sip2gsup('SIP-Auth-Data-Item'()) -> #'GSUPAuthTuple'{}.
 dia_sip2gsup(#'SIP-Auth-Data-Item'{'SIP-Authenticate' = [Authenticate], 'SIP-Authorization' = [Authorization],
@@ -182,6 +182,25 @@ handle_cast({tunnel_response, {Imsi, Result}}, State) ->
 	tx_gsup(Socket, Resp),
 	{noreply, State};
 
+handle_cast({purge_ms_response, {Imsi, Result}}, State0) ->
+	lager:info("purge_ms_response for ~p: ~p~n", [Imsi, Result]),
+	Socket = State0#gsups_state.socket,
+	case Result of
+		ok ->
+			Resp = #{message_type => purge_ms_res,
+				imsi => Imsi,
+				freeze_p_tmsi => true
+				};
+		{error, GsupCause} ->
+			Resp = #{message_type => purge_ms_err,
+				imsi => Imsi,
+				cause => GsupCause
+				}
+	end,
+	tx_gsup(Socket, Resp),
+	State1 = delete_gsups_ue(Imsi, State0),
+	{noreply, State1};
+
 handle_cast(Info, S) ->
 	error_logger:error_report(["unknown handle_cast", {module, ?MODULE}, {info, Info}, {state, S}]),
 	{noreply, S}.
@@ -269,6 +288,31 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := ep
 	end,
 	{noreply, State};
 
+% Purge MS / trigger the delete of session to the PGW
+handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := purge_ms_req, imsi := Imsi}}, State) ->
+	lager:info("GSUP: Rx ~p~n", [GsupMsgRx]),
+	UE = find_gsups_ue_by_imsi(Imsi, State),
+	case UE of
+	#gsups_ue{imsi = Imsi} ->
+		case ue_fsm:purge_ms_request(UE#gsups_ue.pid) of
+		ok ->	ok;
+		_  ->	Resp = #{message_type => purge_ms_err,
+				imsi => Imsi,
+				message_class => 5,
+				cause => ?GSUP_CAUSE_NET_FAIL
+			},
+			tx_gsup(Socket, Resp)
+		end;
+	undefined ->
+		Resp = #{message_type => purge_ms_err,
+			 imsi => Imsi,
+			 message_class => 5,
+			 cause => ?GSUP_CAUSE_IMSI_UNKNOWN
+		},
+		tx_gsup(Socket, Resp)
+	end,
+	{noreply, State};
+
 handle_info(Info, S) ->
 	error_logger:error_report(["unknown handle_info", {module, ?MODULE}, {info, Info}, {state, S}]),
 	{noreply, S}.
@@ -290,6 +334,10 @@ lu_response(Imsi, Result) ->
 tunnel_response(Imsi, Result) ->
 	lager:info("tunnel_response(~p): ~p~n", [Imsi, Result]),
 	gen_server:cast(?SERVER, {tunnel_response, {Imsi, Result}}).
+
+purge_ms_response(Imsi, Result) ->
+	lager:info("purge_ms_response(~p): ~p~n", [Imsi, Result]),
+	gen_server:cast(?SERVER, {purge_ms_response, {Imsi, Result}}).
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
@@ -323,3 +371,7 @@ find_or_new_gsups_ue(Imsi, State) ->
 	    undefined ->
 		new_gsups_ue(Imsi, State)
 	end.
+
+delete_gsups_ue(Imsi, State) ->
+	SetRemoved = sets:del_element(Imsi, State#gsups_state.ues),
+	State#gsups_state{ues = SetRemoved}.
