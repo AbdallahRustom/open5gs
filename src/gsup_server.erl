@@ -202,9 +202,18 @@ handle_info({ipa_tcp_accept, Socket}, S) ->
 	{noreply, S#gsups_state{socket=Socket}};
 
 % send auth info / requesting authentication tuples
-handle_info({ipa, _Socket, ?IPAC_PROTO_EXT_GSUP, _GsupMsgRx = #{message_type := send_auth_info_req, imsi := Imsi}}, State0) ->
+handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, _GsupMsgRx = #{message_type := send_auth_info_req, imsi := Imsi}}, State0) ->
 	{UE, State1} = find_or_new_gsups_ue(Imsi, State0),
-	ue_fsm:auth_request(UE#gsups_ue.pid),
+	case ue_fsm:auth_request(UE#gsups_ue.pid) of
+	ok -> ok;
+	{error, _} ->
+		Resp = #{message_type => send_auth_info_err,
+			 imsi => Imsi,
+			 message_class => 5,
+			 cause => ?GSUP_CAUSE_NET_FAIL
+		},
+		tx_gsup(Socket, Resp)
+	end,
 	{noreply, State1};
 
 % location update request / when a UE wants to connect to a specific APN. This will trigger a AAA->HLR Request Server Assignment Request
@@ -212,15 +221,24 @@ handle_info({ipa, _Socket, ?IPAC_PROTO_EXT_GSUP, _GsupMsgRx = #{message_type := 
 handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, _GsupMsgRx = #{message_type := location_upd_req, imsi := Imsi}}, State) ->
 	UE = find_gsups_ue_by_imsi(Imsi, State),
 	case UE of
-		#gsups_ue{imsi = Imsi} ->
-			ue_fsm:lu_request(UE#gsups_ue.pid);
-		undefined ->
+	#gsups_ue{imsi = Imsi} ->
+		case ue_fsm:lu_request(UE#gsups_ue.pid) of
+		ok -> ok;
+		{error, _} ->
 			Resp = #{message_type => location_upd_err,
 				 imsi => Imsi,
 				 message_class => 5,
-				 cause => ?GSUP_CAUSE_IMSI_UNKNOWN
+				 cause => ?GSUP_CAUSE_NET_FAIL
 			},
 			tx_gsup(Socket, Resp)
+		end;
+	undefined ->
+		Resp = #{message_type => location_upd_err,
+			 imsi => Imsi,
+			 message_class => 5,
+			 cause => ?GSUP_CAUSE_IMSI_UNKNOWN
+		},
+		tx_gsup(Socket, Resp)
 	end,
 	{noreply, State};
 
@@ -230,15 +248,24 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := ep
 	lager:info("GSUP: Rx ~p~n", [GsupMsgRx]),
 	UE = find_gsups_ue_by_imsi(Imsi, State),
 	case UE of
-		#gsups_ue{imsi = Imsi} ->
-			ue_fsm:tunnel_request(UE#gsups_ue.pid);
-		undefined ->
+	#gsups_ue{imsi = Imsi} ->
+		case ue_fsm:tunnel_request(UE#gsups_ue.pid) of
+		ok -> ok;
+		{error, _} ->
 			Resp = #{message_type => epdg_tunnel_error,
-				 imsi => Imsi,
-				 message_class => 5,
-				 cause => ?GSUP_CAUSE_IMSI_UNKNOWN
+				imsi => Imsi,
+				message_class => 5,
+				cause => ?GSUP_CAUSE_NET_FAIL
 			},
 			tx_gsup(Socket, Resp)
+		end;
+	undefined ->
+		Resp = #{message_type => epdg_tunnel_error,
+				imsi => Imsi,
+				message_class => 5,
+				cause => ?GSUP_CAUSE_IMSI_UNKNOWN
+		},
+		tx_gsup(Socket, Resp)
 	end,
 	{noreply, State};
 

@@ -50,19 +50,39 @@ start_link(Imsi) ->
 
 auth_request(Pid) ->
         lager:info("ue_fsm auth_request~n", []),
-        gen_statem:cast(Pid, auth_request).
+        try
+                gen_statem:call(Pid, auth_request)
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
 
 lu_request(Pid) ->
         lager:info("ue_fsm lu_request~n", []),
-        gen_statem:cast(Pid, lu_request).
+        try
+                gen_statem:call(Pid, lu_request)
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
 
 tunnel_request(Pid) ->
         lager:info("ue_fsm tunnel_request~n", []),
-        gen_statem:cast(Pid, tunnel_request).
+        try
+        gen_statem:call(Pid, tunnel_request)
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
 
 received_gtpc_create_session_response(Pid, Msg) ->
         lager:info("ue_fsm received_gtpc_create_session_response ~p~n", [Msg]),
-        gen_statem:cast(Pid, {received_gtpc_create_session_response, Msg}).
+        try
+        gen_statem:call(Pid, {received_gtpc_create_session_response, Msg})
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
 
 init(Imsi) ->
         lager:info("ue_fsm init(~p)~n", [Imsi]),
@@ -76,38 +96,42 @@ terminate(Reason, State, Data) ->
         lager:info("terminating ~p with reason ~p state=~p, ~p~n", [?MODULE, Reason, State, Data]),
         ok.
 
-state_new(cast, auth_request, Data) ->
+state_new({call, From}, auth_request, Data) ->
         lager:info("ue_fsm state_new event=auth_request, ~p~n", [Data]),
         Auth = auth_handler:auth_request(Data#ue_fsm_data.imsi),
         gsup_server:auth_response(Data#ue_fsm_data.imsi, Auth),
         case Auth of
                 {ok, _} ->
-                        {next_state, state_authenticated, Data};
+                        {next_state, state_authenticated, Data, [{reply,From,ok}]};
 		{error, Err} ->
-                        {stop, Err, Data}
+                        {stop_and_reply, Err, Data, [{reply,From,{error,Err}}]}
 	end.
 
-state_authenticated(cast, lu_request, Data) ->
+state_authenticated({call, From}, lu_request, Data) ->
         lager:info("ue_fsm state_authenticated event=lu_request, ~p~n", [Data]),
         Result = epdg_diameter_swx:server_assignment_request(Data#ue_fsm_data.imsi, 1, "internet"),
         gsup_server:lu_response(Data#ue_fsm_data.imsi, Result),
         case Result of
                 {ok, _} ->
-                        {keep_state, Data};
+                        {keep_state, Data, [{reply,From,ok}]};
                 {error, Err} ->
-                        {stop, Err, Data}
+                        {stop, Err, Data, [{reply,From,{error,Err}}]}
         end;
 
-state_authenticated(cast, tunnel_request, Data) ->
+state_authenticated({call, From}, tunnel_request, Data) ->
         lager:info("ue_fsm state_authenticated event=tunnel_request, ~p~n", [Data]),
         epdg_gtpc_s2b:create_session_req(Data#ue_fsm_data.imsi),
-        {keep_state, Data};
+        {keep_state, Data, [{reply,From,ok}]};
 
-state_authenticated(cast, {received_gtpc_create_session_response, Result}, Data) ->
+state_authenticated({call, From}, {received_gtpc_create_session_response, Result}, Data) ->
         lager:info("ue_fsm state_authenticated event=received_gtpc_create_session_response, ~p~n", [Data]),
         gsup_server:tunnel_response(Data#ue_fsm_data.imsi, Result),
-        {keep_state, Data};
+        {keep_state, Data, [{reply,From,ok}]};
+
+state_authenticated({call, From}, _Whatever, Data) ->
+        lager:error("ue_fsm state_authenticated: Unexpected call event, ~p~n", [Data]),
+        {keep_state, Data, [{reply,From,ok}]};
 
 state_authenticated(cast, _Whatever, Data) ->
-        lager:info("ue_fsm state_authenticated event=auth_request, ~p~n", [Data]),
+        lager:error("ue_fsm state_authenticated: Unexpected cast event, ~p~n", [Data]),
         {keep_state, Data}.
