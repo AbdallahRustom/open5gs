@@ -129,7 +129,7 @@ handle_cast({auth_response, {Imsi, Auth}}, State) ->
 					imsi => list_to_binary(Mar#'MAA'.'User-Name'),
 					auth_tuples => lists:map(fun dia_sip2gsup/1, SipAuthTuples)
 					};
-		{error, _} ->	Resp = #{message_type => send_auth_info_err, imsi => Imsi, message_class => 5, cause => 16#11}
+		{error, _} ->	Resp = #{message_type => send_auth_info_err, imsi => Imsi, message_class => 5, cause => ?GSUP_CAUSE_NET_FAIL}
 	end,
 	lager:info("GSUP: Tx ~p~n", [Resp]),
 	ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp),
@@ -146,7 +146,7 @@ handle_cast({lu_response, {Imsi, Result}}, State) ->
 		{error, _} ->	Resp = #{message_type => location_upd_err,
 					 imsi => Imsi,
 					 message_class => 5,
-					 cause => 16#11 % FIXME: Use proper defines as cause code and use Network failure
+					 cause => ?GSUP_CAUSE_NET_FAIL
 					 }
 	end,
 	lager:info("GSUP: Tx ~p~n", [Resp]),
@@ -178,7 +178,7 @@ handle_cast({tunnel_response, {Imsi, Result}}, State) ->
 			Resp = #{message_type => epdg_tunnel_error,
 				imsi => Imsi,
 				message_class => 5,
-				cause => 16#11 % FIXME: Use proper defines as cause code and use Network failure
+				cause => ?GSUP_CAUSE_NET_FAIL
 				}
 	end,
 	lager:info("GSUP: Tx ~p~n", [Resp]),
@@ -221,7 +221,7 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, _GsupMsgRx = #{message_type := l
 			Resp = #{message_type => location_upd_err,
 				 imsi => Imsi,
 				 message_class => 5,
-				 cause => 16#11 % FIXME: Use proper defines as cause code and use Network failure
+				 cause => ?GSUP_CAUSE_IMSI_UNKNOWN
 			},
 			lager:info("GSUP: Tx ~p~n", [Resp]),
 			ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp)
@@ -240,7 +240,7 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := ep
 			Resp = #{message_type => epdg_tunnel_error,
 				 imsi => Imsi,
 				 message_class => 5,
-				 cause => 16#11 % FIXME: Use proper defines as cause code and use Network failure
+				 cause => ?GSUP_CAUSE_IMSI_UNKNOWN
 			},
 			lager:info("GSUP: Tx ~p~n", [Resp]),
 			ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp)

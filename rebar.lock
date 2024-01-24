@@ -12,7 +12,7 @@
   0},
  {<<"osmo_gsup">>,
   {git,"https://gerrit.osmocom.org/erlang/osmo_gsup",
-       {ref,"1a064fa6aece492352271ae164b29262d66f6b6d"}},
+       {ref,"1391d074f610e736368319d56fd958fa36e3addf"}},
   0},
  {<<"osmo_ss7">>,
   {git,"https://gitea.osmocom.org/erlang/osmo_ss7",
