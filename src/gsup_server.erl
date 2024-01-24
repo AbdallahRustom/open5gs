@@ -131,8 +131,7 @@ handle_cast({auth_response, {Imsi, Auth}}, State) ->
 					};
 		{error, _} ->	Resp = #{message_type => send_auth_info_err, imsi => Imsi, message_class => 5, cause => ?GSUP_CAUSE_NET_FAIL}
 	end,
-	lager:info("GSUP: Tx ~p~n", [Resp]),
-	ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp),
+	tx_gsup(Socket, Resp),
 	{noreply, State};
 
 handle_cast({lu_response, {Imsi, Result}}, State) ->
@@ -149,8 +148,7 @@ handle_cast({lu_response, {Imsi, Result}}, State) ->
 					 cause => ?GSUP_CAUSE_NET_FAIL
 					 }
 	end,
-	lager:info("GSUP: Tx ~p~n", [Resp]),
-	ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp),
+	tx_gsup(Socket, Resp),
 	{noreply, State};
 
 handle_cast({tunnel_response, {Imsi, Result}}, State) ->
@@ -181,8 +179,7 @@ handle_cast({tunnel_response, {Imsi, Result}}, State) ->
 				cause => ?GSUP_CAUSE_NET_FAIL
 				}
 	end,
-	lager:info("GSUP: Tx ~p~n", [Resp]),
-	ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp),
+	tx_gsup(Socket, Resp),
 	{noreply, State};
 
 handle_cast(Info, S) ->
@@ -223,8 +220,7 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, _GsupMsgRx = #{message_type := l
 				 message_class => 5,
 				 cause => ?GSUP_CAUSE_IMSI_UNKNOWN
 			},
-			lager:info("GSUP: Tx ~p~n", [Resp]),
-			ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp)
+			tx_gsup(Socket, Resp)
 	end,
 	{noreply, State};
 
@@ -242,8 +238,7 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := ep
 				 message_class => 5,
 				 cause => ?GSUP_CAUSE_IMSI_UNKNOWN
 			},
-			lager:info("GSUP: Tx ~p~n", [Resp]),
-			ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Resp)
+			tx_gsup(Socket, Resp)
 	end,
 	{noreply, State};
 
@@ -272,6 +267,11 @@ tunnel_response(Imsi, Result) ->
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
+
+tx_gsup(Socket, Msg) ->
+	lager:info("GSUP: Tx ~p~n", [Msg]),
+	ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Msg).
+
 
 new_gsups_ue(Imsi, State) ->
 	{ok, Pid} = ue_fsm:start_link(Imsi),
