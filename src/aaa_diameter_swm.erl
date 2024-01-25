@@ -29,26 +29,31 @@ init([]) ->
 
 
 auth_request(Imsi) ->
-	gen_server:call(?SERVER, {epdg_auth_req, Imsi}).
+	gen_server:cast(?SERVER, {epdg_auth_req, Imsi}).
 
-handle_call({epdg_auth_req, Imsi}, From, State) ->
+handle_cast({epdg_auth_req, Imsi}, State) ->
 	% request the diameter code for a tuple
 	CKey = [],
 	IntegrityKey = [],
 	Result = aaa_diameter_swx:multimedia_auth_request(Imsi, 1, "EAP-AKA", 1, CKey, IntegrityKey),
 	case Result of
-		{ok, Mar} -> {reply, {ok, Mar}, State};
-		{error, Err} -> {reply, {error, Err}, State};
-		{_, _} -> {reply, {error, unknown}, State}
-	end.
+		{ok, _MAA} -> epdg_diameter_swm:auth_response(Imsi, Result);
+		{error, Err} -> epdg_diameter_swm:auth_response(Imsi, Result);
+		_ -> epdg_diameter_swm:auth_response(Imsi, {error, unknown})
+	end,
+	{noreply, State};
 
 handle_cast(Info, S) ->
 	error_logger:error_report(["unknown handle_cast", {module, ?MODULE}, {info, Info}, {state, S}]),
 	{noreply, S}.
+
 handle_info(Info, S) ->
 	error_logger:error_report(["unknown handle_info", {module, ?MODULE}, {info, Info}, {state, S}]),
 	{noreply, S}.
 
+handle_call(Request, From, S) ->
+	error_logger:error_report(["unknown handle_call", {module, ?MODULE}, {request, Request}, {from, From}, {state, S}]),
+	{noreply, S}.
 
 stop() ->
 	gen_server:call(?MODULE, stop).

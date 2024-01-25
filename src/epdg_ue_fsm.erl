@@ -40,8 +40,9 @@
 -export([start_link/1]).
 -export([init/1,callback_mode/0,terminate/3]).
 -export([auth_request/1, lu_request/1, tunnel_request/1, purge_ms_request/1]).
+-export([received_swm_auth_response/2]).
 -export([received_gtpc_create_session_response/2, received_gtpc_delete_session_response/2]).
--export([state_new/3,state_authenticated/3, state_wait_delete_session_resp/3]).
+-export([state_new/3, state_wait_auth_resp/3, state_authenticated/3, state_wait_delete_session_resp/3]).
 
 -record(ue_fsm_data, {
         imsi
@@ -88,6 +89,15 @@ purge_ms_request(Pid) ->
                 {error, Err}
         end.
 
+received_swm_auth_response(Pid, Result) ->
+        lager:info("ue_fsm received_swm_auth_response ~p~n", [Result]),
+        try
+        gen_statem:call(Pid, {received_swm_auth_response, Result})
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
+
 received_gtpc_create_session_response(Pid, Msg) ->
         lager:info("ue_fsm received_gtpc_create_session_response ~p~n", [Msg]),
         try
@@ -128,18 +138,26 @@ terminate(Reason, State, Data) ->
 
 state_new({call, From}, auth_request, Data) ->
         lager:info("ue_fsm state_new event=auth_request, ~p~n", [Data]),
-        Auth = epdg_diameter_swm:auth_request(Data#ue_fsm_data.imsi),
-        gsup_server:auth_response(Data#ue_fsm_data.imsi, Auth),
-        case Auth of
-                {ok, _} ->
-                        {next_state, state_authenticated, Data, [{reply,From,ok}]};
-		{error, Err} ->
-                        {stop_and_reply, Err, Data, [{reply,From,{error,Err}}]}
+        case epdg_diameter_swm:auth_request(Data#ue_fsm_data.imsi) of
+        ok -> {next_state, state_wait_auth_resp, Data, [{reply,From,ok}]};
+        {error, Err} -> {stop_and_reply, Err, Data, [{reply,From,{error,Err}}]}
 	end;
 
 state_new({call, From}, purge_ms_request, Data) ->
         lager:info("ue_fsm state_new event=purge_ms_request, ~p~n", [Data]),
         {stop_and_reply, purge_ms_request, Data, [{reply,From,ok}]}.
+
+state_wait_auth_resp({call, From}, {received_swm_auth_response, Auth}, Data) ->
+        lager:info("ue_fsm state_wait_auth_resp event=received_swm_auth_response, ~p~n", [Data]),
+        gsup_server:auth_response(Data#ue_fsm_data.imsi, Auth),
+        case Auth of
+                {ok, _} ->
+                        {next_state, state_authenticated, Data, [{reply,From,ok}]};
+                {error, Err} ->
+                        {next_state, state_new, Data, [{reply,From,{error,Err}}]};
+                _ ->
+                        {next_state, state_new, Data, [{reply,From,{error,unknown}}]}
+        end.
 
 state_authenticated({call, From}, lu_request, Data) ->
         lager:info("ue_fsm state_authenticated event=lu_request, ~p~n", [Data]),

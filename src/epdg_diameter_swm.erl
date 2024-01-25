@@ -7,13 +7,20 @@
 -include_lib("diameter_3gpp_ts29_273_swx.hrl").
 
 -record(swm_state, {
+	sessions = sets:new()
 }).
+
+-record(swm_session, {
+	imsi                   :: binary(),
+	pid                    :: pid()
+    }).
 
 -export([start_link/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3, terminate/2]).
 
 -export[(auth_request/1)].
+-export[(auth_response/2)].
 
 -define(SERVER, ?MODULE).
 
@@ -27,16 +34,30 @@ init([]) ->
 
 
 auth_request(Imsi) ->
-	gen_server:call(?SERVER, {epdg_auth_req, Imsi}).
-
-handle_call({epdg_auth_req, Imsi}, _From, State) ->
-	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
-	Result = aaa_diameter_swm:auth_request(Imsi),
+	Result = gen_server:call(?SERVER, {epdg_auth_req, Imsi}),
 	case Result of
-		{ok, Mar} -> {reply, {ok, Mar}, State};
-		{error, Err} -> {reply, {error, Err}, State};
-		{_, _} -> {reply, {error, unknown}, State}
+		{ok, _Mar} ->
+			epdg_ue_fsm:received_swm_auth_response(self(), Result),
+			ok;
+		_ -> Result
 	end.
+
+
+handle_call({epdg_auth_req, Imsi}, {Pid, _Tag} = _From, State0) ->
+	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
+	{_Sess, State1} = find_or_new_swm_session(Imsi, Pid, State0),
+	ok = aaa_diameter_swm:auth_request(Imsi),
+	{reply, ok, State1}.
+
+handle_cast({epdg_auth_resp, Imsi, Result}, State) ->
+	Sess = find_swm_session_by_imsi(Imsi, State),
+	case Sess of
+	#swm_session{imsi = Imsi} ->
+		epdg_ue_fsm:received_swm_auth_response(Sess#swm_session.pid, Result);
+	undefined ->
+		error_logger:error_report(["unknown swm_session", {module, ?MODULE}, {imsi, Imsi}, {state, State}])
+	end,
+	{noreply, State};
 
 handle_cast(Info, S) ->
 	error_logger:error_report(["unknown handle_cast", {module, ?MODULE}, {info, Info}, {state, S}]),
@@ -54,3 +75,36 @@ code_change(_OldVsn, State, _Extra) ->
 
 terminate(Reason, _S) ->
 	lager:info("terminating ~p with reason ~p~n", [?MODULE, Reason]).
+
+%% Emulation from the wire (DIAMETER SWm), called from internal AAA Server:
+auth_response(Imsi, Result) ->
+	ok = gen_server:cast(?SERVER, {epdg_auth_resp, Imsi, Result}).
+
+%% ------------------------------------------------------------------
+%% Internal Function Definitions
+%% ------------------------------------------------------------------
+
+new_swm_session(Imsi, Pid, State) ->
+	Sess = #swm_session{imsi = Imsi,
+	    pid = Pid
+	},
+	NewSt = State#swm_state{sessions = sets:add_element(Sess, State#swm_state.sessions)},
+	{Sess, NewSt}.
+
+% returns Sess if found, undefined it not
+find_swm_session_by_imsi(Imsi, State) ->
+	sets:fold(
+		fun(SessIt = #swm_session{imsi = Imsi}, _AccIn) -> SessIt;
+		(_, AccIn) -> AccIn
+		end,
+		undefined,
+		State#swm_state.sessions).
+
+find_or_new_swm_session(Imsi, Pid, State) ->
+	Sess = find_swm_session_by_imsi(Imsi, State),
+	case Sess of
+		#swm_session{imsi = Imsi} ->
+		{Sess, State};
+		undefined ->
+		new_swm_session(Imsi, Pid, State)
+	end.
