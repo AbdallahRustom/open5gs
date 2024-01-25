@@ -65,9 +65,23 @@ handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) wh
                   'Origin-Realm'=OR},
     lager:info("S6b Tx to ~p: ~p~n", [Caps, Resp]),
 	{reply, Resp};
-    % TODO: extract relevant fields from DIAMETER AAA
-%% handle_request/3
+
+% 3GPP TS 29.273 9.2.2.3.1 Session-Termination-Request (STR) Command:
+handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) when is_record(Req, 'STR') ->
+    lager:info("S6b Rx from ~p: ~p~n", [Caps, Req]),
+    % extract relevant fields from DIAMETER STR:
+    #diameter_caps{origin_host = {OH,_}, origin_realm = {OR,_}} = Caps,
+    #'STR'{'Session-Id' = SessionId,
+           'Auth-Application-Id' = _AuthAppId,
+           'User-Name' = _UserNameOpt} = Req,
+    % 3GPP TS 29.273 9.2.2.3.2 Session-Termination-Answer (STA) Command:
+    Resp = #'STA'{'Session-Id' = SessionId,
+                  'Result-Code' = 2001,
+                  'Origin-Host' = OH,
+                  'Origin-Realm' = OR},
+    lager:info("S6b Tx to ~p: ~p~n", [Caps, Resp]),
+    {reply, Resp};
+
 handle_request(Packet, _SvcName, Peer) ->
     lager:error("S6b Rx unexpected msg from ~p: ~p~n", [Peer, Packet]),
-    %PESPIN: TODO: handle S6b AAR here, see osmo_dia2gsup "handle_request" as example.
     erlang:error({unexpected, ?MODULE, ?LINE}).
