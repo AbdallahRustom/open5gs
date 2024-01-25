@@ -14,11 +14,9 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3, terminate/2]).
 
--export[(auth_request/1)].
+-export([auth_request/1, auth_compl_request/2]).
 
 -define(SERVER, ?MODULE).
-
-% The ets table contains only IMSIs
 
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
@@ -31,6 +29,9 @@ init([]) ->
 auth_request(Imsi) ->
 	gen_server:cast(?SERVER, {epdg_auth_req, Imsi}).
 
+auth_compl_request(Imsi, Apn) ->
+	gen_server:cast(?SERVER, {epdg_auth_compl_req, Imsi, Apn}).
+
 handle_cast({epdg_auth_req, Imsi}, State) ->
 	% request the diameter code for a tuple
 	CKey = [],
@@ -38,8 +39,18 @@ handle_cast({epdg_auth_req, Imsi}, State) ->
 	Result = aaa_diameter_swx:multimedia_auth_request(Imsi, 1, "EAP-AKA", 1, CKey, IntegrityKey),
 	case Result of
 		{ok, _MAA} -> epdg_diameter_swm:auth_response(Imsi, Result);
-		{error, Err} -> epdg_diameter_swm:auth_response(Imsi, Result);
+		{error, _Err} -> epdg_diameter_swm:auth_response(Imsi, Result);
 		_ -> epdg_diameter_swm:auth_response(Imsi, {error, unknown})
+	end,
+	{noreply, State};
+
+handle_cast({epdg_auth_compl_req, Imsi, Apn}, State) ->
+	% request the diameter code for a tuple
+	Result = aaa_diameter_swx:server_assignment_request(Imsi, 1, Apn),
+	case Result of
+		{ok, _SAA} -> epdg_diameter_swm:auth_compl_response(Imsi, Result);
+		{error, _Err} -> epdg_diameter_swm:auth_compl_response(Imsi, Result);
+		_ -> epdg_diameter_swm:auth_compl_response(Imsi, {error, unknown})
 	end,
 	{noreply, State};
 

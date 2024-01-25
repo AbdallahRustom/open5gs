@@ -138,7 +138,7 @@ handle_cast({lu_response, {Imsi, Result}}, State) ->
 	lager:info("lu_response for ~p: ~p~n", [Imsi, Result]),
 	Socket = State#gsups_state.socket,
 	case Result of
-		{ok, _Sar} ->	Resp = #{message_type => location_upd_res,
+		ok ->	Resp = #{message_type => location_upd_res,
 					 imsi => Imsi,
 					 message_class => 5
 					 };

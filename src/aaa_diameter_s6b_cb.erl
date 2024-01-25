@@ -57,8 +57,9 @@ handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) wh
 	#'AAR'{'Session-Id' = SessionId,
            'Auth-Application-Id' = AuthAppId,
            'Auth-Request-Type' = AuthReqType,
-           'User-Name' = UserName} = Req,
-    Result = aaa_diameter_swx:server_assignment_request(UserName, 1, "internet"),
+           'User-Name' = [UserName],
+           'Service-Selection' = [Apn]} = Req,
+    Result = aaa_diameter_swx:server_assignment_request(UserName, 1, Apn),
     case Result of
             {ok, _} ->
                     ResultCode = 2001;

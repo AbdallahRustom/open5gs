@@ -19,8 +19,8 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3, terminate/2]).
 
--export[(auth_request/1)].
--export[(auth_response/2)].
+-export([auth_request/1, auth_compl_request/2]).
+-export([auth_response/2, auth_compl_response/2]).
 
 -define(SERVER, ?MODULE).
 
@@ -42,18 +42,49 @@ auth_request(Imsi) ->
 		_ -> Result
 	end.
 
+% Rx "GSUP CEAI LU Req" is our way of saying Rx "Swm Diameter-EAP REQ (DER) with EAP AVP containing successuful auth":
+auth_compl_request(Imsi, Apn) ->
+	Result = gen_server:call(?SERVER, {epdg_auth_compl_req, Imsi, Apn}),
+	case Result of
+		{ok, _Mar} ->
+			epdg_ue_fsm:received_swm_auth_compl_response(self(), Result),
+			ok;
+		_ -> Result
+	end.
+
 
 handle_call({epdg_auth_req, Imsi}, {Pid, _Tag} = _From, State0) ->
 	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
 	{_Sess, State1} = find_or_new_swm_session(Imsi, Pid, State0),
 	ok = aaa_diameter_swm:auth_request(Imsi),
-	{reply, ok, State1}.
+	{reply, ok, State1};
+
+handle_call({epdg_auth_compl_req, Imsi, Apn}, _From, State) ->
+	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
+	Sess = find_swm_session_by_imsi(Imsi, State),
+	case Sess of
+	#swm_session{imsi = Imsi} ->
+		Reply = aaa_diameter_swm:auth_compl_request(Imsi, Apn);
+	undefined ->
+		Reply = {error,unknown_imsi}
+	end,
+	{reply, Reply, State}.
 
 handle_cast({epdg_auth_resp, Imsi, Result}, State) ->
 	Sess = find_swm_session_by_imsi(Imsi, State),
 	case Sess of
 	#swm_session{imsi = Imsi} ->
 		epdg_ue_fsm:received_swm_auth_response(Sess#swm_session.pid, Result);
+	undefined ->
+		error_logger:error_report(["unknown swm_session", {module, ?MODULE}, {imsi, Imsi}, {state, State}])
+	end,
+	{noreply, State};
+
+handle_cast({epdg_auth_compl_resp, Imsi, Result}, State) ->
+	Sess = find_swm_session_by_imsi(Imsi, State),
+	case Sess of
+	#swm_session{imsi = Imsi} ->
+		epdg_ue_fsm:received_swm_auth_compl_response(Sess#swm_session.pid, Result);
 	undefined ->
 		error_logger:error_report(["unknown swm_session", {module, ?MODULE}, {imsi, Imsi}, {state, State}])
 	end,
@@ -79,6 +110,11 @@ terminate(Reason, _S) ->
 %% Emulation from the wire (DIAMETER SWm), called from internal AAA Server:
 auth_response(Imsi, Result) ->
 	ok = gen_server:cast(?SERVER, {epdg_auth_resp, Imsi, Result}).
+
+%Rx Swm Diameter-EAP Answer (DEA) containing APN-Configuration, triggered by
+%earlier Tx DER EAP AVP containing successuful auth":
+auth_compl_response(Imsi, Result) ->
+	ok = gen_server:cast(?SERVER, {epdg_auth_compl_resp, Imsi, Result}).
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
