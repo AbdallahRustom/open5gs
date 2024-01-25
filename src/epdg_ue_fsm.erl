@@ -30,9 +30,9 @@
 % for the parts of the runtime libraries of Erlang/OTP used as well as
 % that of the covered work.
 
--module(ue_fsm).
+-module(epdg_ue_fsm).
 -behaviour(gen_statem).
--define(NAME, ue_fsm).
+-define(NAME, epdg_ue_fsm).
 
 -include_lib("osmo_gsup/include/gsup_protocol.hrl").
 -include_lib("gtplib/include/gtp_packet.hrl").

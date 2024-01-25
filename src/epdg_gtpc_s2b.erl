@@ -287,7 +287,7 @@ rx_gtp(Resp = #gtp{version = v2, type = create_session_response}, State0) ->
             Sess1 = update_gtp_session_from_create_session_response(Resp, Sess0),
             lager:info("s2b: Updated Session after create_session_response: ~p~n", [Sess1]),
             State1 = update_gtp_session(Sess0, Sess1, State0),
-            ue_fsm:received_gtpc_create_session_response(Sess0#gtp_session.pid, {ok, Resp}),
+            epdg_ue_fsm:received_gtpc_create_session_response(Sess0#gtp_session.pid, {ok, Resp}),
             {noreply, State1}
         end;
 
@@ -299,7 +299,7 @@ rx_gtp(Resp = #gtp{version = v2, type = delete_session_response}, State0) ->
             {noreply, State0};
         Sess ->
             State1 = delete_gtp_session(Sess, State0),
-            ue_fsm:received_gtpc_delete_session_response(Sess#gtp_session.pid, Resp),
+            epdg_ue_fsm:received_gtpc_delete_session_response(Sess#gtp_session.pid, Resp),
             {noreply, State1}
         end;
 

@@ -223,7 +223,7 @@ handle_info({ipa_tcp_accept, Socket}, S) ->
 % send auth info / requesting authentication tuples
 handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, _GsupMsgRx = #{message_type := send_auth_info_req, imsi := Imsi}}, State0) ->
 	{UE, State1} = find_or_new_gsups_ue(Imsi, State0),
-	case ue_fsm:auth_request(UE#gsups_ue.pid) of
+	case epdg_ue_fsm:auth_request(UE#gsups_ue.pid) of
 	ok -> ok;
 	{error, _} ->
 		Resp = #{message_type => send_auth_info_err,
@@ -241,7 +241,7 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, _GsupMsgRx = #{message_type := l
 	UE = find_gsups_ue_by_imsi(Imsi, State),
 	case UE of
 	#gsups_ue{imsi = Imsi} ->
-		case ue_fsm:lu_request(UE#gsups_ue.pid) of
+		case epdg_ue_fsm:lu_request(UE#gsups_ue.pid) of
 		ok -> ok;
 		{error, _} ->
 			Resp = #{message_type => location_upd_err,
@@ -268,7 +268,7 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := ep
 	UE = find_gsups_ue_by_imsi(Imsi, State),
 	case UE of
 	#gsups_ue{imsi = Imsi} ->
-		case ue_fsm:tunnel_request(UE#gsups_ue.pid) of
+		case epdg_ue_fsm:tunnel_request(UE#gsups_ue.pid) of
 		ok -> ok;
 		{error, _} ->
 			Resp = #{message_type => epdg_tunnel_error,
@@ -294,7 +294,7 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := pu
 	UE = find_gsups_ue_by_imsi(Imsi, State),
 	case UE of
 	#gsups_ue{imsi = Imsi} ->
-		case ue_fsm:purge_ms_request(UE#gsups_ue.pid) of
+		case epdg_ue_fsm:purge_ms_request(UE#gsups_ue.pid) of
 		ok ->	ok;
 		_  ->	Resp = #{message_type => purge_ms_err,
 				imsi => Imsi,
@@ -349,7 +349,7 @@ tx_gsup(Socket, Msg) ->
 
 
 new_gsups_ue(Imsi, State) ->
-	{ok, Pid} = ue_fsm:start_link(Imsi),
+	{ok, Pid} = epdg_ue_fsm:start_link(Imsi),
 	UE = #gsups_ue{imsi = Imsi, pid = Pid},
 	NewSt = State#gsups_state{ues = sets:add_element(UE, State#gsups_state.ues)},
 	{UE, NewSt}.
