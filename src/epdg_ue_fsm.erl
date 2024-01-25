@@ -128,7 +128,7 @@ terminate(Reason, State, Data) ->
 
 state_new({call, From}, auth_request, Data) ->
         lager:info("ue_fsm state_new event=auth_request, ~p~n", [Data]),
-        Auth = auth_handler:auth_request(Data#ue_fsm_data.imsi),
+        Auth = epdg_diameter_swm:auth_request(Data#ue_fsm_data.imsi),
         gsup_server:auth_response(Data#ue_fsm_data.imsi, Auth),
         case Auth of
                 {ok, _} ->

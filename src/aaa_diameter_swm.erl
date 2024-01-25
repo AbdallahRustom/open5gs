@@ -1,10 +1,12 @@
--module(auth_handler).
+% AAA Server implementation of SWm Diameter interface, TS 29.273 section 7
+% This interface is so far implemented through internal erlang messages against
+% the internal ePDG.
+-module(aaa_diameter_swm).
 -behaviour(gen_server).
 
--include_lib("osmo_gsup/include/gsup_protocol.hrl").
 -include_lib("diameter_3gpp_ts29_273_swx.hrl").
 
--record(auth_state, {
+-record(swm_state, {
 	table_id % ets table id
 }).
 
@@ -23,7 +25,7 @@ start_link() ->
 
 init([]) ->
 	TableId = ets:new(auth_req, [bag, named_table]),
-	{ok, #auth_state{table_id = TableId}}.
+	{ok, #swm_state{table_id = TableId}}.
 
 
 auth_request(Imsi) ->

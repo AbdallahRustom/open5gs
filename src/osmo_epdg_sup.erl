@@ -23,6 +23,7 @@ init([]) ->
 	GtpcLocalPort = application:get_env(?ENV_APP_NAME, gtpc_local_port, ?ENV_DEFAULT_GTPC_LOCAL_PORT),
 	GtpcRemoteIp = application:get_env(?ENV_APP_NAME, gtpc_remote_ip, ?ENV_DEFAULT_GTPC_REMOTE_IP),
 	GtpcRemotePort = application:get_env(?ENV_APP_NAME, gtpc_remote_port, ?ENV_DEFAULT_GTPC_REMOTE_PORT),
+	%% AAA Server processes:
 	AAADiaSWxServer = {aaa_diameter_swx, {aaa_diameter_swx,start_link,[]},
 			   permanent,
 			   5000,
@@ -33,6 +34,12 @@ init([]) ->
 			   5000,
 			   worker,
 			   [aaa_diameter_s6b_cb]},
+	AAADiaSWmServer = {aaa_diameter_swm, {aaa_diameter_swm, start_link, []},
+			   permanent,
+			   5000,
+			   worker,
+			   [aaa_diameter_swm]},
+	%% ePDG processes:
 	GtpcServer = {epdg_gtpc_s2b, {epdg_gtpc_s2b,start_link, [GtpcLocalIp, GtpcLocalPort, GtpcRemoteIp, GtpcRemotePort, []]},
 		      permanent,
 		      5000,
@@ -43,9 +50,9 @@ init([]) ->
 		      5000,
 		      worker,
 		      [gsup_server]},
-	AuthHandler = {auth_handler, {auth_handler, start_link, []},
-		       permanent,
-		       5000,
-		       worker,
-		       [auth_handler]},
-	{ok, { {one_for_all, 5, 10}, [AAADiaSWxServer, AAADiaS6bServer, GtpcServer, GsupServer, AuthHandler]} }.
+	DiaSWmServer = {epdg_diameter_swm, {epdg_diameter_swm, start_link, []},
+		        permanent,
+		        5000,
+		        worker,
+		        [epdg_diameter_swm]},
+	{ok, { {one_for_all, 5, 10}, [AAADiaSWxServer, AAADiaS6bServer, AAADiaSWmServer, GtpcServer, GsupServer, DiaSWmServer]} }.
