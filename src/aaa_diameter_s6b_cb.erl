@@ -49,6 +49,7 @@ handle_error(Reason, Request, _SvcName, _Peer) when is_list(Request) ->
     lager:error("Request error: ~p~n", [Reason]),
 	?UNEXPECTED.
 
+% 3GPP TS 29.273 9.1.2.2
 handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) when is_record(Req, 'AAR') ->
     lager:info("S6b Rx from ~p: ~p~n", [Caps, Req]),
 	% extract relevant fields from DIAMETER AAR
@@ -56,13 +57,20 @@ handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) wh
 	#'AAR'{'Session-Id' = SessionId,
            'Auth-Application-Id' = AuthAppId,
            'Auth-Request-Type' = AuthReqType,
-           'User-Name' = _UserName} = Req,
+           'User-Name' = UserName} = Req,
+    Result = aaa_diameter_swx:server_assignment_request(UserName, 1, "internet"),
+    case Result of
+            {ok, _} ->
+                    ResultCode = 2001;
+            {error, _Err} ->
+                ResultCode = ?'RULE-FAILURE-CODE_CM_AUTHORIZATION_REJECTED'
+    end,
     Resp = #'AAA'{'Session-Id'=SessionId,
                   'Auth-Application-Id' = AuthAppId,
                   'Auth-Request-Type' = AuthReqType,
-                  'Result-Code'=2001,
-                  'Origin-Host'=OH,
-                  'Origin-Realm'=OR},
+                  'Result-Code' = ResultCode,
+                  'Origin-Host' = OH,
+                  'Origin-Realm' = OR},
     lager:info("S6b Tx to ~p: ~p~n", [Caps, Resp]),
 	{reply, Resp};
 
