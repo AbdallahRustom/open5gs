@@ -4,7 +4,7 @@
 - async calls (e.g. terminate subscription)
 - improve and understand the supervisor
  - when the gsup_server dies, it should only restart the gsup_server
- - same for epdg_diameter_swx
+ - same for aaa_diameter_swx
 
 - linting for erlang?
 

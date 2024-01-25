@@ -143,7 +143,7 @@ state_new({call, From}, purge_ms_request, Data) ->
 
 state_authenticated({call, From}, lu_request, Data) ->
         lager:info("ue_fsm state_authenticated event=lu_request, ~p~n", [Data]),
-        Result = epdg_diameter_swx:server_assignment_request(Data#ue_fsm_data.imsi, 1, "internet"),
+        Result = aaa_diameter_swx:server_assignment_request(Data#ue_fsm_data.imsi, 1, "internet"),
         gsup_server:lu_response(Data#ue_fsm_data.imsi, Result),
         case Result of
                 {ok, _} ->

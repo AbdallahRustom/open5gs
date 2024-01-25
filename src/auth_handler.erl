@@ -33,7 +33,7 @@ handle_call({epdg_auth_req, Imsi}, From, State) ->
 	% request the diameter code for a tuple
 	CKey = [],
 	IntegrityKey = [],
-	Result = epdg_diameter_swx:multimedia_auth_request(Imsi, 1, "EAP-AKA", 1, CKey, IntegrityKey),
+	Result = aaa_diameter_swx:multimedia_auth_request(Imsi, 1, "EAP-AKA", 1, CKey, IntegrityKey),
 	case Result of
 		{ok, Mar} -> {reply, {ok, Mar}, State};
 		{error, Err} -> {reply, {error, Err}, State};

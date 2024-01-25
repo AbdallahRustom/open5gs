@@ -1,7 +1,7 @@
 %%
 %% The diameter application callback module configured by client.erl.
 %%
--module(epdg_diameter_swx_cb).
+-module(aaa_diameter_swx_cb).
 
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter_3gpp_ts29_273_swx.hrl").

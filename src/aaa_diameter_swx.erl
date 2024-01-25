@@ -35,7 +35,7 @@
 % that of the covered work.
 
 
--module(epdg_diameter_swx).
+-module(aaa_diameter_swx).
 -author('Alexander Couzens <lynxis@fe80.eu>').
 
 -behaviour(gen_server).
@@ -57,7 +57,7 @@
 -define(SERVER, ?MODULE).
 -define(SVC_NAME, ?MODULE).
 -define(APP_ALIAS, ?MODULE).
--define(CALLBACK_MOD, epdg_diameter_swx_cb).
+-define(CALLBACK_MOD, aaa_diameter_swx_cb).
 -define(DIAMETER_DICT_SWX, diameter_3gpp_ts29_273_swx).
 -define(ENV_APP_NAME, osmo_epdg).
 -define(ENV_DEFAULT_SESSION_ID, "epdg@localdomain").
