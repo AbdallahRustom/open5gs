@@ -40,13 +40,15 @@
 -export([start_link/1]).
 -export([init/1,callback_mode/0,terminate/3]).
 -export([auth_request/1, lu_request/1, tunnel_request/1, purge_ms_request/1]).
--export([received_swm_auth_response/2, received_swm_auth_compl_response/2]).
+-export([received_swm_auth_response/2, received_swm_auth_compl_response/2, received_swm_session_termination_answer/2]).
 -export([received_gtpc_create_session_response/2, received_gtpc_delete_session_response/2]).
--export([state_new/3, state_wait_auth_resp/3, state_authenticating/3, state_authenticated/3, state_wait_delete_session_resp/3]).
+-export([state_new/3, state_wait_auth_resp/3, state_authenticating/3, state_authenticated/3,
+         state_wait_delete_session_resp/3, state_wait_swm_session_termination_answer/3]).
 
 -record(ue_fsm_data, {
         imsi,
-        apn = "internet" :: string()
+        apn = "internet" :: string(),
+        tear_down_gsup_cause = 0 :: integer()
         }).
 
 start_link(Imsi) ->
@@ -108,6 +110,15 @@ received_swm_auth_compl_response(Pid, Result) ->
                 {error, Err}
         end.
 
+received_swm_session_termination_answer(Pid, Result) ->
+        lager:info("ue_fsm received_swm_session_termination_answer ~p~n", [Result]),
+        try
+        gen_statem:call(Pid, {received_swm_sta, Result})
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
+
 received_gtpc_create_session_response(Pid, Msg) ->
         lager:info("ue_fsm received_gtpc_create_session_response ~p~n", [Msg]),
         try
@@ -140,11 +151,14 @@ init(Imsi) ->
         {ok, state_new, Data}.
 
 callback_mode() ->
-        state_functions.
+        [state_functions, state_enter].
 
 terminate(Reason, State, Data) ->
         lager:info("terminating ~p with reason ~p state=~p, ~p~n", [?MODULE, Reason, State, Data]),
         ok.
+
+state_new(enter, _OldState, Data) ->
+        {keep_state, Data};
 
 state_new({call, From}, auth_request, Data) ->
         lager:info("ue_fsm state_new event=auth_request, ~p~n", [Data]),
@@ -157,6 +171,9 @@ state_new({call, From}, purge_ms_request, Data) ->
         lager:info("ue_fsm state_new event=purge_ms_request, ~p~n", [Data]),
         {stop_and_reply, purge_ms_request, Data, [{reply,From,ok}]}.
 
+state_wait_auth_resp(enter, _OldState, Data) ->
+        {keep_state, Data};
+
 state_wait_auth_resp({call, From}, {received_swm_auth_response, Auth}, Data) ->
         lager:info("ue_fsm state_wait_auth_resp event=received_swm_auth_response, ~p~n", [Data]),
         gsup_server:auth_response(Data#ue_fsm_data.imsi, Auth),
@@ -168,6 +185,9 @@ state_wait_auth_resp({call, From}, {received_swm_auth_response, Auth}, Data) ->
                 _ ->
                         {next_state, state_new, Data, [{reply,From,{error,unknown}}]}
         end.
+
+state_authenticating(enter, _OldState, Data) ->
+        {keep_state, Data};
 
 state_authenticating({call, From}, lu_request, Data) ->
         lager:info("ue_fsm state_authenticating event=lu_request, ~p~n", [Data]),
@@ -190,6 +210,9 @@ state_authenticating({call, From}, {received_swm_auth_compl_response, Result}, D
         end,
         gsup_server:lu_response(Data#ue_fsm_data.imsi, Ret),
         {next_state, state_authenticated, Data, [{reply,From,Ret}]}.
+
+state_authenticated(enter, _OldState, Data) ->
+        {keep_state, Data};
 
 state_authenticated({call, From}, tunnel_request, Data) ->
         lager:info("ue_fsm state_authenticated event=tunnel_request, ~p~n", [Data]),
@@ -216,6 +239,9 @@ state_authenticated(cast, _Whatever, Data) ->
         lager:error("ue_fsm state_authenticated: Unexpected cast event, ~p~n", [Data]),
         {keep_state, Data}.
 
+state_wait_delete_session_resp(enter, _OldState, Data) ->
+        {keep_state, Data};
+
 state_wait_delete_session_resp({call, From}, {received_gtpc_delete_session_response, _Resp = #gtp{version = v2, type = delete_session_response, ie = IEs}}, Data) ->
         lager:info("ue_fsm state_wait_delete_session_resp event=received_gtpc_delete_session_response, ~p~n", [Data]),
         #{{v2_cause,0} := CauseIE} = IEs,
@@ -223,11 +249,35 @@ state_wait_delete_session_resp({call, From}, {received_gtpc_delete_session_respo
         GsupCause = conv:cause_gtp2gsup(GtpCause),
         lager:debug("Cause: GTP_atom=~p -> GTP_int=~p -> GSUP_int=~p~n", [CauseIE#v2_cause.v2_cause, GtpCause, GsupCause]),
         case GsupCause of
-        0 -> gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, ok);
-        _ -> gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, {error, GsupCause})
+        0 -> Data1 = Data;
+        _ -> Data1 = Data#ue_fsm_data{tear_down_gsup_cause = GsupCause}
+        end,
+        {next_state, state_wait_swm_session_termination_answer, Data1, [{reply,From,ok}]};
+
+state_wait_delete_session_resp({call, From}, Event, Data) ->
+        lager:error("ue_fsm state_wait_delete_session_resp: Unexpected call event ~p, ~p~n", [Event, Data]),
+        {keep_state, Data, [{reply,From,{error,unexpected_event}}]}.
+
+state_wait_swm_session_termination_answer(enter, _OldState, Data) ->
+        % TODO: Send STR towards AAA-Server
+        % % 3GPP TS 29.273 7.1.2.3
+        lager:info("ue_fsm state_wait_swm_session_termination_answer event=enter, ~p~n", [Data]),
+        case epdg_diameter_swm:session_termination_request(Data#ue_fsm_data.imsi) of
+        ok -> {keep_state, Data};
+        {error, _Err} ->
+                gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, {error, ?GSUP_CAUSE_NET_FAIL}),
+                {keep_state, Data}
+        end;
+
+state_wait_swm_session_termination_answer({call, From}, {received_swm_sta, DiaResultCode}, Data) ->
+        lager:info("ue_fsm state_wait_swm_session_termination_answer event=received_swm_sta, ~p~n", [Data]),
+        case {DiaResultCode, Data#ue_fsm_data.tear_down_gsup_cause} of
+        {2001, 0} -> gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, ok);
+        {2001, _} -> gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, {error, Data#ue_fsm_data.tear_down_gsup_cause});
+        _ -> gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, {error, ?GSUP_CAUSE_NET_FAIL})
         end,
         {keep_state, Data, [{reply,From,ok}]};
 
-state_wait_delete_session_resp({call, From}, Event, Data) ->
+state_wait_swm_session_termination_answer({call, From}, Event, Data) ->
         lager:error("ue_fsm state_wait_delete_session_resp: Unexpected call event ~p, ~p~n", [Event, Data]),
         {keep_state, Data, [{reply,From,{error,unexpected_event}}]}.

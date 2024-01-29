@@ -19,8 +19,8 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3, terminate/2]).
 
--export([auth_request/1, auth_compl_request/2]).
--export([auth_response/2, auth_compl_response/2]).
+-export([auth_request/1, auth_compl_request/2, session_termination_request/1]).
+-export([auth_response/2, auth_compl_response/2, session_termination_answer/2]).
 
 -define(SERVER, ?MODULE).
 
@@ -52,6 +52,15 @@ auth_compl_request(Imsi, Apn) ->
 		_ -> Result
 	end.
 
+% 3GPP TS 29.273 7.1.2.3
+session_termination_request(Imsi) ->
+	Result = gen_server:call(?SERVER, {str, Imsi}),
+	case Result of
+		{ok, _Mar} ->
+			epdg_ue_fsm:received_swm_session_terminate_answer(self(), Result),
+			ok;
+		_ -> Result
+	end.
 
 handle_call({epdg_auth_req, Imsi}, {Pid, _Tag} = _From, State0) ->
 	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
@@ -65,6 +74,17 @@ handle_call({epdg_auth_compl_req, Imsi, Apn}, _From, State) ->
 	case Sess of
 	#swm_session{imsi = Imsi} ->
 		Reply = aaa_diameter_swm:auth_compl_request(Imsi, Apn);
+	undefined ->
+		Reply = {error,unknown_imsi}
+	end,
+	{reply, Reply, State};
+
+handle_call({str, Imsi}, _From, State) ->
+	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
+	Sess = find_swm_session_by_imsi(Imsi, State),
+	case Sess of
+	#swm_session{imsi = Imsi} ->
+		Reply = aaa_diameter_swm:session_termination_request(Imsi);
 	undefined ->
 		Reply = {error,unknown_imsi}
 	end,
@@ -85,6 +105,16 @@ handle_cast({epdg_auth_compl_resp, Imsi, Result}, State) ->
 	case Sess of
 	#swm_session{imsi = Imsi} ->
 		epdg_ue_fsm:received_swm_auth_compl_response(Sess#swm_session.pid, Result);
+	undefined ->
+		error_logger:error_report(["unknown swm_session", {module, ?MODULE}, {imsi, Imsi}, {state, State}])
+	end,
+	{noreply, State};
+
+handle_cast({sta, Imsi, Result}, State) ->
+	Sess = find_swm_session_by_imsi(Imsi, State),
+	case Sess of
+	#swm_session{imsi = Imsi} ->
+		epdg_ue_fsm:received_swm_session_termination_answer(Sess#swm_session.pid, Result);
 	undefined ->
 		error_logger:error_report(["unknown swm_session", {module, ?MODULE}, {imsi, Imsi}, {state, State}])
 	end,
@@ -115,6 +145,10 @@ auth_response(Imsi, Result) ->
 %earlier Tx DER EAP AVP containing successuful auth":
 auth_compl_response(Imsi, Result) ->
 	ok = gen_server:cast(?SERVER, {epdg_auth_compl_resp, Imsi, Result}).
+
+% Rx SWm Diameter STA:
+session_termination_answer(Imsi, Result) ->
+	ok = gen_server:cast(?SERVER, {sta, Imsi, Result}).
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions

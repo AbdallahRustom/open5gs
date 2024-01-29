@@ -14,7 +14,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3, terminate/2]).
 
--export([auth_request/1, auth_compl_request/2]).
+-export([auth_request/1, auth_compl_request/2, session_termination_request/1]).
 
 -define(SERVER, ?MODULE).
 
@@ -31,6 +31,9 @@ auth_request(Imsi) ->
 
 auth_compl_request(Imsi, Apn) ->
 	gen_server:cast(?SERVER, {epdg_auth_compl_req, Imsi, Apn}).
+
+session_termination_request(Imsi) ->
+	gen_server:cast(?SERVER, {str, Imsi}).
 
 handle_cast({epdg_auth_req, Imsi}, State) ->
 	% request the diameter code for a tuple
@@ -52,6 +55,10 @@ handle_cast({epdg_auth_compl_req, Imsi, Apn}, State) ->
 		{error, _Err} -> epdg_diameter_swm:auth_compl_response(Imsi, Result);
 		_ -> epdg_diameter_swm:auth_compl_response(Imsi, {error, unknown})
 	end,
+	{noreply, State};
+
+handle_cast({str, Imsi}, State) ->
+	ok = epdg_diameter_swm:session_termination_answer(Imsi, 2001),
 	{noreply, State};
 
 handle_cast(Info, S) ->
