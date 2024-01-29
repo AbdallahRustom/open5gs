@@ -40,8 +40,8 @@
 
 -behaviour(gen_server).
 
--include_lib("diameter_3gpp_ts29_273_s6b.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
+-include_lib("diameter_3gpp_ts29_273_s6b.hrl").
 
 %% API Function Exports
 -export([start_link/0]).
@@ -51,6 +51,7 @@
 -export([code_change/3]).
 -export([multimedia_auth_request/6]).
 -export([server_assignment_request/3]).
+-export([tx_aa_answer/2]).
 -export([test/0, test/1]).
 
 %% Diameter Application Definitions
@@ -145,6 +146,10 @@ multimedia_auth_request(IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey)
 server_assignment_request(IMSI, Type, APN) ->
     gen_server:call(?SERVER,
                           {sar, {IMSI, Type, APN}}).
+
+tx_aa_answer(Pid, ResultCode) ->
+    % handle_request(AAR) was spawned into its own process, and it's blocked waiting for AAA:
+    Pid ! {aaa, ResultCode}.
 
 result_code_success(2001) -> ok;
 result_code_success(2002) -> ok;

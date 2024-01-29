@@ -181,7 +181,7 @@ parse_saa(#'SAA'{'Experimental-Result' = [#{'Vendor-Code' := ?VENDOR_ID_3GPP, 'E
 parse_saa(Saa) ->
     {unknown_err, []}.
 
-handle_call({mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey}}, _From, State) ->
+handle_call({mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey}}, {Pid, _Tag} = _From, State) ->
     SessionId = diameter:session_id(application:get_env(?ENV_APP_NAME, origin_host, ?ENV_DEFAULT_ORIG_HOST)),
     MAR = #'MAR'{'Vendor-Specific-Application-Id' = #'Vendor-Specific-Application-Id'{
                     'Vendor-Id'           = ?VENDOR_ID_3GPP,
@@ -196,20 +196,17 @@ handle_call({mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey}}, _F
                  'SIP-Number-Auth-Items' = NumAuthItems,
                  'RAT-Type' = RAT
                 },
-    Ret = diameter:call(?SVC_NAME, ?APP_ALIAS, MAR, []),
+    Ret = diameter:call(?SVC_NAME, ?APP_ALIAS, MAR, [{extra, [Pid]}, detach]),
     case Ret of
-        {ok, MAA} ->
-            SuccessCode = parse_maa(MAA),
-            case SuccessCode of
-                    {ok, _} -> {reply, {ok, MAA}, State};
-                    {Err, Info} -> {reply, {error, {Err, Info, MAA}}, State}
-                end;
+        ok ->
+            {reply, ok, State};
         {error, Err} ->
             lager:error("Error: ~w~n", [Err]),
             {reply, {error, Err}, State}
     end;
 
-handle_call({sar, {IMSI, Type, APN}}, _From, State) ->
+handle_call({sar, {IMSI, Type, APN}}, {Pid, _Tag} = _From, State) ->
+    lager:debug("SWx Tx SAR Imsi=~p Type=~p APN=~p~n", [IMSI, Type, APN]),
     SessionId = diameter:session_id(application:get_env(?ENV_APP_NAME, origin_host, ?ENV_DEFAULT_ORIG_HOST)),
     SAR = #'SAR'{'Vendor-Specific-Application-Id' = #'Vendor-Specific-Application-Id'{
                     'Vendor-Id'           = ?VENDOR_ID_3GPP,
@@ -220,14 +217,10 @@ handle_call({sar, {IMSI, Type, APN}}, _From, State) ->
                  'Server-Assignment-Type' = Type,
                  'Service-Selection' = [APN]
                 },
-    Ret = diameter:call(?SVC_NAME, ?APP_ALIAS, SAR, []),
+    Ret = diameter:call(?SVC_NAME, ?APP_ALIAS, SAR, [{extra, [Pid]}, detach]),
     case Ret of
-        {ok, Saa} ->
-            SuccessCode = parse_saa(Saa),
-            case SuccessCode of
-                    {ok, _} -> {reply, {ok, Saa}, State};
-                    {Err, Info} -> {reply, {error, {Err, Info, Saa}}, State}
-                end;
+        ok ->
+            {reply, ok, State};
         {error, Err} ->
             lager:error("Error: ~w~n", [Err]),
             {reply, {error, Err}, State}

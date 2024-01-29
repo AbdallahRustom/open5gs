@@ -23,17 +23,17 @@ peer_down(_SvcName, Peer, State) ->
     State.
 
 %% pick_peer/4
-pick_peer([_Peer | _], _, _SvcName, _State) ->
-    ?UNEXPECTED.
+pick_peer([Peer | _], _, _SvcName, _State) ->
+    {ok, Peer}.
 
 %% prepare_request/3
-
-prepare_request(_, _SvcName, _Peer) ->
-	?UNEXPECTED.
+prepare_request(_Req, _SvcName, _Peer) ->
+    lager:error("Unexpected prepare_request(): ~p~n", [_Req]),
+    ?UNEXPECTED.
 
 %% prepare_retransmit/3
-prepare_retransmit(_Packet, _SvcName, _Peer) ->
-	?UNEXPECTED.
+prepare_retransmit(Packet, SvcName, Peer) ->
+    prepare_request(Packet, SvcName, Peer).
 
 %% handle_answer/4
 
@@ -42,12 +42,12 @@ prepare_retransmit(_Packet, _SvcName, _Peer) ->
 %% the former case, return in the latter.
 
 handle_answer(_Packet, _Request, _SvcName, _Peer) ->
-	?UNEXPECTED.
+    ?UNEXPECTED.
 
 %% handle_error/4
 handle_error(Reason, Request, _SvcName, _Peer) when is_list(Request) ->
     lager:error("Request error: ~p~n", [Reason]),
-	?UNEXPECTED.
+    ?UNEXPECTED.
 
 % 3GPP TS 29.273 9.1.2.2
 handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) when is_record(Req, 'AAR') ->
@@ -59,21 +59,25 @@ handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) wh
            'Auth-Request-Type' = AuthReqType,
            'User-Name' = [UserName],
            'Service-Selection' = [Apn]} = Req,
-    Result = aaa_diameter_swx:server_assignment_request(UserName, 1, Apn),
+    Result = aaa_diameter_swm:get_ue_fsm_by_imsi(UserName),
     case Result of
-            {ok, _} ->
-                    ResultCode = 2001;
-            {error, _Err} ->
-                ResultCode = ?'RULE-FAILURE-CODE_CM_AUTHORIZATION_REJECTED'
+    {ok, Pid} ->
+        ok = aaa_ue_fsm:ev_rx_s6b_aar(Pid, Apn),
+        lager:debug("Waiting for S6b AAA~n", []),
+        receive
+            {aaa, ResultCode} -> lager:debug("Rx AAA with ResultCode=~p~n", [ResultCode])
+        end;
+    _ -> lager:error("Error looking up FSM for IMSI~n", [UserName]),
+         ResultCode = ?'RULE-FAILURE-CODE_CM_AUTHORIZATION_REJECTED'
     end,
-    Resp = #'AAA'{'Session-Id'=SessionId,
+    Resp = #'AAA'{'Session-Id'= SessionId,
                   'Auth-Application-Id' = AuthAppId,
                   'Auth-Request-Type' = AuthReqType,
                   'Result-Code' = ResultCode,
                   'Origin-Host' = OH,
                   'Origin-Realm' = OR},
     lager:info("S6b Tx to ~p: ~p~n", [Caps, Resp]),
-	{reply, Resp};
+    {reply, Resp};
 
 % 3GPP TS 29.273 9.2.2.3.1 Session-Termination-Request (STR) Command:
 handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) when is_record(Req, 'STR') ->
