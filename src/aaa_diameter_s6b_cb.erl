@@ -86,10 +86,30 @@ handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) wh
     #diameter_caps{origin_host = {OH,_}, origin_realm = {OR,_}} = Caps,
     #'STR'{'Session-Id' = SessionId,
            'Auth-Application-Id' = _AuthAppId,
-           'User-Name' = _UserNameOpt} = Req,
+           'Termination-Cause' = _TermCause,
+           'User-Name' = [UserName]} = Req,
+    Result = aaa_diameter_swm:get_ue_fsm_by_imsi(UserName),
+    case Result of
+    {ok, Pid} ->
+        case aaa_ue_fsm:ev_rx_s6b_str(Pid) of
+        ok ->
+            lager:debug("Waiting for S6b STA~n", []),
+            receive
+                {sta, ResultCode} -> lager:debug("Rx STA with ResultCode=~p~n", [ResultCode])
+            end;
+        {ok, DiaRC} when is_integer(DiaRC) ->
+            ResultCode = DiaRC;
+        {error, Err} when is_integer(Err) ->
+            ResultCode = Err;
+        {error, _} ->
+            ResultCode = ?'RULE-FAILURE-CODE_CM_AUTHORIZATION_REJECTED'
+        end;
+    _ -> lager:error("Error looking up FSM for IMSI~n", [UserName]),
+        ResultCode = ?'RULE-FAILURE-CODE_CM_AUTHORIZATION_REJECTED'
+    end,
     % 3GPP TS 29.273 9.2.2.3.2 Session-Termination-Answer (STA) Command:
     Resp = #'STA'{'Session-Id' = SessionId,
-                  'Result-Code' = 2001,
+                  'Result-Code' = ResultCode,
                   'Origin-Host' = OH,
                   'Origin-Realm' = OR},
     lager:info("S6b Tx to ~p: ~p~n", [Caps, Resp]),

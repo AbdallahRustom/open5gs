@@ -35,15 +35,18 @@
 -define(NAME, aaa_ue_fsm).
 
 -include_lib("diameter/include/diameter.hrl").
+-include_lib("diameter_3gpp_ts29_229.hrl").
 -include_lib("diameter_3gpp_ts29_273_s6b.hrl").
 
 -export([start_link/1]).
 -export([init/1,callback_mode/0,terminate/3]).
--export([ev_swm_auth_req/1, ev_swm_auth_compl/2, ev_rx_swx_maa/2, ev_rx_swx_saa/2, ev_rx_s6b_aar/2]).
+-export([ev_swm_auth_req/1, ev_swm_auth_compl/2, ev_rx_swm_str/1, ev_rx_swx_maa/2, ev_rx_swx_saa/2,
+         ev_rx_s6b_aar/2, ev_rx_s6b_str/1]).
 -export([state_new/3, state_wait_swx_maa/3, state_wait_swx_saa/3, state_authenticated/3, state_authenticated_wait_swx_saa/3]).
 
 -record(ue_fsm_data, {
         imsi             = unknown :: binary(),
+        apn                        :: string(),
         epdg_sess_active = false   :: boolean(),
         pgw_sess_active  = false   :: boolean(),
         s6b_resp_pid               :: pid()
@@ -72,6 +75,15 @@ ev_swm_auth_compl(Pid, Apn) ->
                 {error, Err}
         end.
 
+ev_rx_swm_str(Pid) ->
+        lager:info("ue_fsm ev_rx_swm_str~n", []),
+        try
+                gen_statem:call(Pid, rx_swm_str)
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
+
 ev_rx_swx_maa(Pid, MAA) ->
         lager:info("ue_fsm ev_rx_swx_maa~n", []),
         try
@@ -81,10 +93,10 @@ ev_rx_swx_maa(Pid, MAA) ->
                 {error, Err}
         end.
 
-ev_rx_swx_saa(Pid, ResultCode) ->
+ev_rx_swx_saa(Pid, {SAType, ResultCode}) ->
         lager:info("ue_fsm ev_rx_swx_saa~n", []),
         try
-                gen_statem:call(Pid, {rx_swx_saa, ResultCode})
+                gen_statem:call(Pid, {rx_swx_saa, SAType, ResultCode})
         catch
         exit:Err ->
                 {error, Err}
@@ -94,6 +106,15 @@ ev_rx_s6b_aar(Pid, Apn) ->
         lager:info("ue_fsm ev_rx_s6b_aar: ~p~n", [Apn]),
         try
                 gen_statem:call(Pid, {rx_s6b_aar, Apn})
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
+
+ev_rx_s6b_str(Pid) ->
+        lager:info("ue_fsm ev_rx_s6b_str: ~p~n", []),
+        try
+                gen_statem:call(Pid, rx_s6b_str)
         catch
         exit:Err ->
                 {error, Err}
@@ -151,9 +172,9 @@ state_wait_swx_maa({call, From}, {rx_swx_maa, MAA}, Data) ->
 state_wait_swx_saa(enter, _OldState, Data) ->
         {keep_state, Data};
 
-state_wait_swx_saa({call, From}, {rx_swx_saa, SAA}, Data) ->
+state_wait_swx_saa({call, From}, {rx_swx_saa, _SAType, ResultCode}, Data) ->
         lager:info("ue_fsm state_wait_swx_saa event=rx_swx_saa, ~p~n", [Data]),
-        aaa_diameter_swm:auth_compl_response(Data#ue_fsm_data.imsi, {ok, SAA}),
+        aaa_diameter_swm:auth_compl_response(Data#ue_fsm_data.imsi, {ok, ResultCode}),
         % TODO: don't transit if SAS returned error code.
         {next_state, state_authenticated, Data, [{reply,From,ok}]}.
 
@@ -164,10 +185,55 @@ state_authenticated(enter, _OldState, Data) ->
 
 state_authenticated({call, {Pid, _Tag} = From}, {rx_s6b_aar, Apn}, Data) ->
         lager:info("ue_fsm state_authenticated event=rx_s6b_aar Apn=~p, ~p~n", [Apn, Data]),
-        case aaa_diameter_swx:server_assignment_request(Data#ue_fsm_data.imsi, 1, Apn) of
-        ok ->   Data1 = Data#ue_fsm_data{s6b_resp_pid = Pid},
+        case aaa_diameter_swx:server_assignment_request(Data#ue_fsm_data.imsi,
+                                                        ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_REGISTRATION',
+                                                        Apn) of
+        ok ->   Data1 = Data#ue_fsm_data{s6b_resp_pid = Pid, apn = Apn},
                 {next_state, state_authenticated_wait_swx_saa, Data1, [{reply,From,ok}]};
         {error, Err} -> {keep_state, Data, [{reply,From,{error, Err}}]}
+        end;
+
+state_authenticated({call, From}, rx_swm_str, Data) ->
+        lager:info("ue_fsm state_authenticated event=rx_swm_str, ~p~n", [Data]),
+        case {Data#ue_fsm_data.epdg_sess_active, Data#ue_fsm_data.pgw_sess_active} of
+        {false, _} -> %% The SWm session is not active...
+                DiaRC = 5002, %% UNKNOWN_SESSION_ID
+                {keep_state, Data, [{reply,From,{error, DiaRC}}]};
+        {true, true} -> %% The other session is still active, no need to send SAR Type=USER_DEREGISTRATION
+                lager:info("ue_fsm state_authenticated event=rx_swn_str: PGW session still active, skip updating the HSS~n", []),
+                Data1 = Data#ue_fsm_data{epdg_sess_active = false},
+                {keep_state, Data1, [{reply,From,{ok, 2001}}]};
+        {true, false} -> %% All sessions will now be gone, trigger SAR Type=USER_DEREGISTRATION
+                case aaa_diameter_swx:server_assignment_request(Data#ue_fsm_data.imsi,
+                                                                ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_USER_DEREGISTRATION',
+                                                                Data#ue_fsm_data.apn) of
+                ok ->   {next_state, state_authenticated_wait_swx_saa, Data, [{reply,From,ok}]};
+                {error, _Err} ->
+                        DiaRC = 5002, %% UNKNOWN_SESSION_ID
+                        {keep_state, Data, [{reply,From,{error, DiaRC}}]}
+                end
+        end;
+
+state_authenticated({call, {Pid, _Tag} = From}, rx_s6b_str, Data) ->
+        lager:info("ue_fsm state_authenticated event=rx_s6b_str, ~p~n", [Data]),
+        case {Data#ue_fsm_data.pgw_sess_active, Data#ue_fsm_data.epdg_sess_active} of
+        {false, _} -> %% The S6b session is not active...
+                DiaRC = 5002, %% UNKNOWN_SESSION_ID
+                {keep_state, Data, [{reply,From,{error, DiaRC}}]};
+        {true, true} -> %% The other session is still active, no need to send SAR Type=USER_DEREGISTRATION
+                lager:info("ue_fsm state_authenticated event=rx_s6b_str: ePDG session still active, skip updating the HSS~n", []),
+                Data1 = Data#ue_fsm_data{pgw_sess_active = false},
+                {keep_state, Data1, [{reply,From,{ok, 2001}}]};
+        {true, false} -> %% All sessions will now be gone, trigger SAR Type=USER_DEREGISTRATION
+                case aaa_diameter_swx:server_assignment_request(Data#ue_fsm_data.imsi,
+                                                                ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_USER_DEREGISTRATION',
+                                                                Data#ue_fsm_data.apn) of
+                ok ->   Data1 = Data#ue_fsm_data{s6b_resp_pid = Pid},
+                        {next_state, state_authenticated_wait_swx_saa, Data1, [{reply,From,ok}]};
+                {error, _Err} ->
+                        DiaRC = 5002, %% UNKNOWN_SESSION_ID
+                        {keep_state, Data, [{reply,From,{error, DiaRC}}]}
+                end
         end;
 
 state_authenticated({call, From}, _Whatever, Data) ->
@@ -177,9 +243,22 @@ state_authenticated({call, From}, _Whatever, Data) ->
 state_authenticated_wait_swx_saa(enter, _OldState, Data) ->
         {keep_state, Data};
 
-state_authenticated_wait_swx_saa({call, From}, {rx_swx_saa, ResultCode}, Data) ->
-        lager:info("ue_fsm state_authenticated_wait_swx_saa event=rx_swx_saa ResulCode=~p, ~p~n", [ResultCode, Data]),
-        aaa_diameter_s6b:tx_aa_answer(Data#ue_fsm_data.s6b_resp_pid, ResultCode),
-        Data1 = Data#ue_fsm_data{s6b_resp_pid = undefined},
-        {next_state, state_authenticated, Data1, [{reply,From,ok}]}.
-
+state_authenticated_wait_swx_saa({call, From}, {rx_swx_saa, SAType, ResultCode}, Data) ->
+        lager:info("ue_fsm state_authenticated_wait_swx_saa event=rx_swx_saa SAType=~p ResulCode=~p, ~p~n", [SAType, ResultCode, Data]),
+        case SAType of
+        ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_REGISTRATION' ->
+                aaa_diameter_s6b:tx_aa_answer(Data#ue_fsm_data.s6b_resp_pid, ResultCode),
+                Data1 = Data#ue_fsm_data{pgw_sess_active = true, s6b_resp_pid = undefined},
+                {next_state, state_authenticated, Data1, [{reply,From,ok}]};
+        ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_USER_DEREGISTRATION' ->
+                case Data#ue_fsm_data.s6b_resp_pid of
+                undefined -> %% SWm initiated
+                        aaa_diameter_swm:session_termination_answer(Data#ue_fsm_data.imsi, ResultCode),
+                        Data1 = Data#ue_fsm_data{epdg_sess_active = false},
+                        {next_state, state_new, Data1, [{reply,From,ok}]};
+                _ -> %% S6b initiated
+                        aaa_diameter_s6b:tx_st_answer(Data#ue_fsm_data.s6b_resp_pid, ResultCode),
+                        Data1 = Data#ue_fsm_data{pgw_sess_active = false, s6b_resp_pid = undefined},
+                        {next_state, state_new, Data1, [{reply,From,ok}]}
+                end
+        end.

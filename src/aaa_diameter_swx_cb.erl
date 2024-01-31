@@ -71,10 +71,13 @@ handle_answer(#diameter_packet{msg = Msg, errors = Errors}, _Request, _SvcName, 
     lager:info("SWx Rx MAA ~p: ~p/ Errors ~p ~n", [Peer, Msg, Errors]),
     aaa_ue_fsm:ev_rx_swx_maa(ReqPid, Msg),
     {ok, Msg};
-handle_answer(#diameter_packet{msg = Msg, errors = Errors}, _Request, _SvcName, Peer, ReqPid) when is_record(Msg, 'SAA')  ->
+handle_answer(#diameter_packet{msg = Msg, errors = Errors}, Request, _SvcName, Peer, ReqPid) when is_record(Msg, 'SAA')  ->
     lager:info("SWx Rx SAA ~p: ~p/ Errors ~p ~n", [Peer, Msg, Errors]),
+    % Recover fields from originating request:
+    #'SAR'{'Server-Assignment-Type' = SAType} = Request,
+    % Retrieve fields from answer:
     #'SAA'{'Result-Code' = [ResultCode]} = Msg,
-    aaa_ue_fsm:ev_rx_swx_saa(ReqPid, ResultCode),
+    aaa_ue_fsm:ev_rx_swx_saa(ReqPid, {SAType, ResultCode}),
     {ok, Msg}.
 handle_answer(#diameter_packet{msg = Msg, errors = []}, _Request, _SvcName, Peer) ->
     lager:info("SWx Rx ~p: ~p~n", [Peer, Msg]),

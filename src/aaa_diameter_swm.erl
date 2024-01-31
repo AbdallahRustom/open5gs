@@ -4,7 +4,7 @@
 -module(aaa_diameter_swm).
 -behaviour(gen_server).
 
--include_lib("diameter_3gpp_ts29_273_swx.hrl").
+-include_lib("diameter_3gpp_ts29_273.hrl").
 
 -record(swm_state, {
 	table_id, % ets table id,
@@ -22,7 +22,7 @@
 -export([get_ue_fsm_by_imsi/1]).
 
 -export([auth_request/1, auth_compl_request/2, session_termination_request/1]).
--export([auth_response/2, auth_compl_response/2]).
+-export([auth_response/2, auth_compl_response/2, session_termination_answer/2]).
 
 -define(SERVER, ?MODULE).
 
@@ -44,6 +44,9 @@ auth_response(Imsi, Result) ->
 
 auth_compl_response(Imsi, Result) ->
 	_Result = gen_server:call(?SERVER, {epdg_auth_compl_resp, Imsi, Result}).
+
+session_termination_answer(Imsi, Result) ->
+	_Result = gen_server:call(?SERVER, {sta, Imsi, Result}).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Rx from emulated SWm wire:
@@ -73,7 +76,21 @@ handle_cast({epdg_auth_compl_req, Imsi, Apn}, State) ->
 	{noreply, State};
 
 handle_cast({str, Imsi}, State) ->
-	ok = epdg_diameter_swm:session_termination_answer(Imsi, 2001),
+	Sess = find_swm_session_by_imsi(Imsi, State),
+	case Sess of
+	#swm_session{} ->
+		case aaa_ue_fsm:ev_rx_swm_str(Sess#swm_session.pid) of
+		ok -> ok; % Answering delayed due to SAR+SAA towards HSS.
+		{ok, DiaRC} when is_integer(DiaRC) ->
+			ok = epdg_diameter_swm:session_termination_answer(Imsi, DiaRC);
+		{error, Err} when is_integer(Err) ->
+			ok = epdg_diameter_swm:session_termination_answer(Imsi, Err);
+		{error, _} ->
+			ok = epdg_diameter_swm:session_termination_answer(Imsi, ?'RULE-FAILURE-CODE_CM_AUTHORIZATION_REJECTED')
+		end;
+	undefined ->
+		ok = epdg_diameter_swm:session_termination_answer(Imsi, ?'RULE-FAILURE-CODE_CM_AUTHORIZATION_REJECTED')
+	end,
 	{noreply, State};
 
 handle_cast(Info, S) ->
@@ -100,6 +117,10 @@ handle_call({epdg_auth_resp, Imsi, Result}, _From, State) ->
 
 handle_call({epdg_auth_compl_resp, Imsi, Result}, _From, State) ->
 	epdg_diameter_swm:auth_compl_response(Imsi, Result),
+	{reply, ok, State};
+
+handle_call({sta, Imsi, DiaRC}, _From, State) ->
+	epdg_diameter_swm:session_termination_answer(Imsi, DiaRC),
 	{reply, ok, State};
 
 handle_call(Request, From, S) ->

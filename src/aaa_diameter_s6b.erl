@@ -51,7 +51,7 @@
 -export([code_change/3]).
 -export([multimedia_auth_request/6]).
 -export([server_assignment_request/3]).
--export([tx_aa_answer/2]).
+-export([tx_aa_answer/2, tx_st_answer/2]).
 -export([test/0, test/1]).
 
 %% Diameter Application Definitions
@@ -150,6 +150,10 @@ server_assignment_request(IMSI, Type, APN) ->
 tx_aa_answer(Pid, ResultCode) ->
     % handle_request(AAR) was spawned into its own process, and it's blocked waiting for AAA:
     Pid ! {aaa, ResultCode}.
+
+tx_st_answer(Pid, ResultCode) ->
+    % handle_request(STR) was spawned into its own process, and it's blocked waiting for STA:
+    Pid ! {sta, ResultCode}.
 
 result_code_success(2001) -> ok;
 result_code_success(2002) -> ok;
