@@ -312,6 +312,7 @@ rx_gtp(Req = #gtp{version = v2, type = delete_bearer_request}, State) ->
         Sess ->
             Resp = gen_delete_bearer_response(Req, Sess, request_accepted, State),
             tx_gtp(Resp, State),
+            epdg_ue_fsm:received_gtpc_delete_bearer_request(Sess#gtp_session.pid),
             State1 = delete_gtp_session(Sess, State),
             {noreply, State1}
         end;

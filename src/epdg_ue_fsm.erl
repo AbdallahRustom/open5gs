@@ -41,13 +41,14 @@
 -export([init/1,callback_mode/0,terminate/3]).
 -export([auth_request/1, lu_request/1, tunnel_request/1, purge_ms_request/1]).
 -export([received_swm_auth_response/2, received_swm_auth_compl_response/2, received_swm_session_termination_answer/2]).
--export([received_gtpc_create_session_response/2, received_gtpc_delete_session_response/2]).
+-export([received_gtpc_create_session_response/2, received_gtpc_delete_session_response/2, received_gtpc_delete_bearer_request/1]).
 -export([state_new/3, state_wait_auth_resp/3, state_authenticating/3, state_authenticated/3,
          state_wait_delete_session_resp/3, state_wait_swm_session_termination_answer/3]).
 
 -record(ue_fsm_data, {
         imsi,
         apn = "internet" :: string(),
+        tear_down_gsup_needed = false :: boolean(), %% need to send GSUP PurgeMSResp after STR+STA?
         tear_down_gsup_cause = 0 :: integer()
         }).
 
@@ -136,6 +137,16 @@ received_gtpc_delete_session_response(Pid, Msg) ->
         exit:Err ->
                 {error, Err}
         end.
+
+received_gtpc_delete_bearer_request(Pid) ->
+        lager:info("ue_fsm received_gtpc_delete_bearer_request~n", []),
+        try
+        gen_statem:call(Pid, received_gtpc_delete_bearer_request)
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
+
 
 %% ------------------------------------------------------------------
 %% Internal helpers
@@ -231,6 +242,11 @@ state_authenticated({call, From}, purge_ms_request, Data) ->
         {error, Err} -> {keep_state, Data, [{reply,From,{error, Err}}]}
         end;
 
+state_authenticated({call, From}, received_gtpc_delete_bearer_request, Data) ->
+        lager:info("ue_fsm state_authenticated event=received_gtpc_delete_bearer_request, ~p~n", [Data]),
+        Data1 = Data#ue_fsm_data{tear_down_gsup_needed = false},
+        {next_state, state_wait_swm_session_termination_answer, Data1, [{reply,From,ok}]};
+
 state_authenticated({call, From}, _Whatever, Data) ->
         lager:error("ue_fsm state_authenticated: Unexpected call event, ~p~n", [Data]),
         {keep_state, Data, [{reply,From,ok}]};
@@ -248,11 +264,12 @@ state_wait_delete_session_resp({call, From}, {received_gtpc_delete_session_respo
         GtpCause = gtp_utils:enum_v2_cause(CauseIE#v2_cause.v2_cause),
         GsupCause = conv:cause_gtp2gsup(GtpCause),
         lager:debug("Cause: GTP_atom=~p -> GTP_int=~p -> GSUP_int=~p~n", [CauseIE#v2_cause.v2_cause, GtpCause, GsupCause]),
+        Data1 = Data#ue_fsm_data{tear_down_gsup_needed = true},
         case GsupCause of
-        0 -> Data1 = Data;
-        _ -> Data1 = Data#ue_fsm_data{tear_down_gsup_cause = GsupCause}
+        0 -> Data2 = Data1;
+        _ -> Data2 = Data1#ue_fsm_data{tear_down_gsup_cause = GsupCause}
         end,
-        {next_state, state_wait_swm_session_termination_answer, Data1, [{reply,From,ok}]};
+        {next_state, state_wait_swm_session_termination_answer, Data2, [{reply,From,ok}]};
 
 state_wait_delete_session_resp({call, From}, Event, Data) ->
         lager:error("ue_fsm state_wait_delete_session_resp: Unexpected call event ~p, ~p~n", [Event, Data]),
@@ -265,16 +282,23 @@ state_wait_swm_session_termination_answer(enter, _OldState, Data) ->
         case epdg_diameter_swm:session_termination_request(Data#ue_fsm_data.imsi) of
         ok -> {keep_state, Data};
         {error, _Err} ->
-                gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, {error, ?GSUP_CAUSE_NET_FAIL}),
+                case Data#ue_fsm_data.tear_down_gsup_needed of
+                true -> gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, {error, ?GSUP_CAUSE_NET_FAIL});
+                false -> ok
+                end,
                 {keep_state, Data}
         end;
 
 state_wait_swm_session_termination_answer({call, From}, {received_swm_sta, DiaResultCode}, Data) ->
         lager:info("ue_fsm state_wait_swm_session_termination_answer event=received_swm_sta, ~p~n", [Data]),
-        case {DiaResultCode, Data#ue_fsm_data.tear_down_gsup_cause} of
-        {2001, 0} -> gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, ok);
-        {2001, _} -> gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, {error, Data#ue_fsm_data.tear_down_gsup_cause});
-        _ -> gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, {error, ?GSUP_CAUSE_NET_FAIL})
+        case Data#ue_fsm_data.tear_down_gsup_needed of
+        true ->
+                case {DiaResultCode, Data#ue_fsm_data.tear_down_gsup_cause} of
+                {2001, 0} -> gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, ok);
+                {2001, _} -> gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, {error, Data#ue_fsm_data.tear_down_gsup_cause});
+                _ -> gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, {error, ?GSUP_CAUSE_NET_FAIL})
+                end;
+        false -> ok
         end,
         {keep_state, Data, [{reply,From,ok}]};
 
