@@ -186,7 +186,7 @@ state_authenticated(enter, _OldState, Data) ->
 state_authenticated({call, {Pid, _Tag} = From}, {rx_s6b_aar, Apn}, Data) ->
         lager:info("ue_fsm state_authenticated event=rx_s6b_aar Apn=~p, ~p~n", [Apn, Data]),
         case aaa_diameter_swx:server_assignment_request(Data#ue_fsm_data.imsi,
-                                                        ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_REGISTRATION',
+                                                        ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_PGW_UPDATE',
                                                         Apn) of
         ok ->   Data1 = Data#ue_fsm_data{s6b_resp_pid = Pid, apn = Apn},
                 {next_state, state_authenticated_wait_swx_saa, Data1, [{reply,From,ok}]};
@@ -246,7 +246,7 @@ state_authenticated_wait_swx_saa(enter, _OldState, Data) ->
 state_authenticated_wait_swx_saa({call, From}, {rx_swx_saa, SAType, ResultCode}, Data) ->
         lager:info("ue_fsm state_authenticated_wait_swx_saa event=rx_swx_saa SAType=~p ResulCode=~p, ~p~n", [SAType, ResultCode, Data]),
         case SAType of
-        ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_REGISTRATION' ->
+        ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_PGW_UPDATE' ->
                 aaa_diameter_s6b:tx_aa_answer(Data#ue_fsm_data.s6b_resp_pid, ResultCode),
                 Data1 = Data#ue_fsm_data{pgw_sess_active = true, s6b_resp_pid = undefined},
                 {next_state, state_authenticated, Data1, [{reply,From,ok}]};
