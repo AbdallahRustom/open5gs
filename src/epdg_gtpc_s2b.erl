@@ -398,7 +398,7 @@ gen_create_session_request(#gtp_session{imsi = Imsi,
                   },
                   #v2_eps_bearer_id{eps_bearer_id = Bearer#gtp_bearer.ebi},
                   #v2_fully_qualified_tunnel_endpoint_identifier{
-                    instance = 0,
+                    instance = Bearer#gtp_bearer.ebi,
                     interface_type = 31, %% "S2b-U ePDG GTP-U"
                     key = Bearer#gtp_bearer.local_data_tei,
                     ipv4 = gtp_utils:ip_to_bin(LocalAddr)
@@ -408,7 +408,7 @@ gen_create_session_request(#gtp_session{imsi = Imsi,
            #v2_international_mobile_subscriber_identity{imsi = Imsi},
            #v2_rat_type{rat_type = 3}, %% 3 = WLAN
            #v2_fully_qualified_tunnel_endpoint_identifier{
-                instance = Bearer#gtp_bearer.ebi,
+                instance = 0,
                 interface_type = 30, %% "S2b ePDG GTP-C"
                 key = LocalCtlTEI,
                 ipv4 = gtp_utils:ip_to_bin(LocalAddr)
@@ -430,7 +430,7 @@ gen_delete_session_request(#gtp_session{remote_control_tei = RemoteCtlTEI} = Ses
     Bearer = gtp_session_default_bearer(Sess),
     IEs = [#v2_eps_bearer_id{eps_bearer_id = Bearer#gtp_bearer.ebi},
            #v2_fully_qualified_tunnel_endpoint_identifier{
-               instance = Bearer#gtp_bearer.ebi,
+               instance = 0,
                interface_type = 30, %% "S2b ePDG GTP-C"
                key = Bearer#gtp_bearer.local_data_tei,
                ipv4 = gtp_utils:ip_to_bin(LocalAddr)
