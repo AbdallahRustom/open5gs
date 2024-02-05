@@ -62,7 +62,7 @@
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3, terminate/2]).
--export([auth_response/2, lu_response/2, tunnel_response/2, purge_ms_response/2]).
+-export([auth_response/2, lu_response/2, tunnel_response/2, purge_ms_response/2, cancel_location_request/1]).
 
 % TODO: -spec dia_sip2gsup('SIP-Auth-Data-Item'()) -> #'GSUPAuthTuple'{}.
 dia_sip2gsup(#'SIP-Auth-Data-Item'{'SIP-Authenticate' = [Authenticate], 'SIP-Authorization' = [Authorization],
@@ -201,6 +201,16 @@ handle_cast({purge_ms_response, {Imsi, Result}}, State0) ->
 	State1 = delete_gsups_ue(Imsi, State0),
 	{noreply, State1};
 
+% Our GSUP CEAI implementation for "IKEv2 Information Delete Request"
+handle_cast({cancel_location_request, Imsi}, State) ->
+	lager:info("cancel_location_request for ~p~n", [Imsi]),
+	Socket = State#gsups_state.socket,
+	Resp = #{message_type => location_cancellation_req,
+		 imsi => Imsi
+		},
+	tx_gsup(Socket, Resp),
+	{noreply, State};
+
 handle_cast(Info, S) ->
 	error_logger:error_report(["unknown handle_cast", {module, ?MODULE}, {info, Info}, {state, S}]),
 	{noreply, S}.
@@ -313,6 +323,16 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := pu
 	end,
 	{noreply, State};
 
+% Our GSUP CEAI implementation for "IKEv2 Information Delete Response".
+handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := location_cancellation_res, imsi := Imsi}}, State0) ->
+	lager:info("GSUP: Rx ~p~n", [GsupMsgRx]),
+	UE = find_gsups_ue_by_imsi(Imsi, State0),
+	case UE of
+	#gsups_ue{imsi = Imsi} -> State1 = delete_gsups_ue(Imsi, State0);
+	undefined -> State1 = State0
+	end,
+	{noreply, State1};
+
 handle_info(Info, S) ->
 	error_logger:error_report(["unknown handle_info", {module, ?MODULE}, {info, Info}, {state, S}]),
 	{noreply, S}.
@@ -338,6 +358,11 @@ tunnel_response(Imsi, Result) ->
 purge_ms_response(Imsi, Result) ->
 	lager:info("purge_ms_response(~p): ~p~n", [Imsi, Result]),
 	gen_server:cast(?SERVER, {purge_ms_response, {Imsi, Result}}).
+
+% Our GSUP CEAI implementation for "IKEv2 Information Delete Request"
+cancel_location_request(Imsi) ->
+	lager:info("cancel_location_request(~p): ~p~n", [Imsi]),
+	gen_server:cast(?SERVER, {cancel_location_request, Imsi}).
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions

@@ -244,6 +244,7 @@ state_authenticated({call, From}, purge_ms_request, Data) ->
 
 state_authenticated({call, From}, received_gtpc_delete_bearer_request, Data) ->
         lager:info("ue_fsm state_authenticated event=received_gtpc_delete_bearer_request, ~p~n", [Data]),
+        gsup_server:cancel_location_request(Data#ue_fsm_data.imsi),
         Data1 = Data#ue_fsm_data{tear_down_gsup_needed = false},
         {next_state, state_wait_swm_session_termination_answer, Data1, [{reply,From,ok}]};
 
