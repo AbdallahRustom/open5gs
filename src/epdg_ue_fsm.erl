@@ -277,7 +277,7 @@ state_wait_delete_session_resp({call, From}, Event, Data) ->
         {keep_state, Data, [{reply,From,{error,unexpected_event}}]}.
 
 state_wait_swm_session_termination_answer(enter, _OldState, Data) ->
-        % TODO: Send STR towards AAA-Server
+        % Send STR towards AAA-Server
         % % 3GPP TS 29.273 7.1.2.3
         lager:info("ue_fsm state_wait_swm_session_termination_answer event=enter, ~p~n", [Data]),
         case epdg_diameter_swm:session_termination_request(Data#ue_fsm_data.imsi) of
@@ -301,7 +301,7 @@ state_wait_swm_session_termination_answer({call, From}, {received_swm_sta, DiaRe
                 end;
         false -> ok
         end,
-        {keep_state, Data, [{reply,From,ok}]};
+        {stop_and_reply, normal, [{reply,From,ok}], Data};
 
 state_wait_swm_session_termination_answer({call, From}, Event, Data) ->
         lager:error("ue_fsm state_wait_delete_session_resp: Unexpected call event ~p, ~p~n", [Event, Data]),
