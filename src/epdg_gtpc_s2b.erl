@@ -219,12 +219,13 @@ new_gtp_session(Imsi, Pid, State) ->
 
 % returns Sess if found, undefined it not
 find_gtp_session_by_imsi(Imsi, State) ->
-    sets:fold(
-        fun(SessIt = #gtp_session{imsi = Imsi}, _AccIn) -> SessIt;
-           (_, AccIn) -> AccIn
-        end,
-        undefined,
-        State#gtp_state.sessions).
+    {Imsi, Res} = sets:fold(
+                    fun(SessIt = #gtp_session{imsi = LookupImsi}, {LookupImsi, _AccIn}) -> {LookupImsi, SessIt};
+                       (_, AccIn) -> AccIn
+                    end,
+                    {Imsi, undefined},
+                    State#gtp_state.sessions),
+    Res.
 
 find_or_new_gtp_session(Imsi, Pid, State) ->
     Sess = find_gtp_session_by_imsi(Imsi, State),
@@ -289,12 +290,13 @@ update_gtp_session_from_create_session_response(Resp = #gtp{version = v2, type =
 
 % returns Sess if found, undefined it not
 find_gtp_session_by_local_teic(LocalControlTei, State) ->
-    sets:fold(
-        fun(SessIt = #gtp_session{local_control_tei = LocalControlTei}, _AccIn) -> SessIt;
-            (_, AccIn) -> AccIn
+    {LocalControlTei, Res} = sets:fold(
+        fun(SessIt = #gtp_session{local_control_tei = LookupLTEIC}, {LookupLTEIC, _AccIn}) -> {LookupLTEIC, SessIt};
+           (_, AccIn) -> AccIn
         end,
-        undefined,
-        State#gtp_state.sessions).
+        {LocalControlTei, undefined},
+        State#gtp_state.sessions),
+    Res.
 
 %% connect/2
 connect(Name, {Socket, RemoteAddr, RemotePort}) ->

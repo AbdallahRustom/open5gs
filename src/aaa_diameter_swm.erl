@@ -148,12 +148,13 @@ new_swm_session(Imsi, State) ->
 
 % returns swm_session if found, undefined if not
 find_swm_session_by_imsi(Imsi, State) ->
-	sets:fold(
-	    fun(UEsIt = #swm_session{imsi = Imsi}, _AccIn) -> UEsIt;
-	       (_, AccIn) -> AccIn
-	    end,
-	    undefined,
-	    State#swm_state.ues).
+	{Imsi, Res} = sets:fold(
+		fun(UEsIt = #swm_session{imsi = LookupImsi}, {LookupImsi, _AccIn}) -> {LookupImsi, UEsIt};
+			(_, AccIn) -> AccIn
+		end,
+		{Imsi, undefined},
+		State#swm_state.ues),
+	Res.
 
 find_or_new_swm_session(Imsi, State) ->
 	UE = find_swm_session_by_imsi(Imsi, State),

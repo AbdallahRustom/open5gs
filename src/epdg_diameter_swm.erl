@@ -163,12 +163,13 @@ new_swm_session(Imsi, Pid, State) ->
 
 % returns Sess if found, undefined it not
 find_swm_session_by_imsi(Imsi, State) ->
-	sets:fold(
-		fun(SessIt = #swm_session{imsi = Imsi}, _AccIn) -> SessIt;
+	{Imsi, Res} = sets:fold(
+		fun(SessIt = #swm_session{imsi = LookupImsi}, {LookupImsi, _AccIn}) -> {LookupImsi, SessIt};
 		(_, AccIn) -> AccIn
 		end,
-		undefined,
-		State#swm_state.sessions).
+		{Imsi, undefined},
+		State#swm_state.sessions),
+	Res.
 
 find_or_new_swm_session(Imsi, Pid, State) ->
 	Sess = find_swm_session_by_imsi(Imsi, State),

@@ -381,12 +381,13 @@ new_gsups_ue(Imsi, State) ->
 
 % returns gsups_ue if found, undefined it not
 find_gsups_ue_by_imsi(Imsi, State) ->
-	sets:fold(
-	    fun(UEsIt = #gsups_ue{imsi = Imsi}, _AccIn) -> UEsIt;
-	       (_, AccIn) -> AccIn
-	    end,
-	    undefined,
-	    State#gsups_state.ues).
+	{Imsi, Res} = sets:fold(
+			fun(SessIt = #gsups_ue{imsi = LookupImsi}, {LookupImsi, _AccIn}) -> {LookupImsi, SessIt};
+			   (_, AccIn) -> AccIn
+			end,
+			{Imsi, undefined},
+			State#gsups_state.ues),
+	Res.
 
 find_or_new_gsups_ue(Imsi, State) ->
 	UE = find_gsups_ue_by_imsi(Imsi, State),
