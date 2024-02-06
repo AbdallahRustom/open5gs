@@ -253,6 +253,18 @@ gtp_session_find_bearer_by_ebi(Sess, Ebi) ->
                     Sess#gtp_session.bearers),
     Res.
 
+gtp_session_add_bearer(Sess, Bearer) ->
+    lager:debug("Add bearer ~p to session ~p~n", [Bearer, Sess]),
+    Sess#gtp_session{bearers = sets:add_element(Bearer, Sess#gtp_session.bearers)}.
+
+gtp_session_del_bearer(Sess, Bearer) ->
+    lager:debug("Remove bearer ~p from session ~p~n", [Bearer, Sess]),
+    Sess1 = Sess#gtp_session{bearers = sets:del_element(Bearer, Sess#gtp_session.bearers)},
+    case Sess1#gtp_session.default_bearer_id of
+    Ebi when Ebi == Bearer#gtp_bearer.ebi -> Sess1#gtp_session{default_bearer_id = undefined};
+    _ -> Sess1
+    end.
+
 gtp_session_default_bearer(Sess) ->
     gtp_session_find_bearer_by_ebi(Sess, Sess#gtp_session.default_bearer_id).
 
@@ -318,17 +330,43 @@ rx_gtp(Resp = #gtp{version = v2, type = delete_session_response}, State0) ->
             {noreply, State1}
         end;
 
-rx_gtp(Req = #gtp{version = v2, type = delete_bearer_request}, State) ->
+rx_gtp(Req = #gtp{version = v2, type = create_bearer_request, ie = IEs}, State) ->
+    Sess = find_gtp_session_by_local_teic(Req#gtp.tei, State),
+    case Sess of
+    undefined ->
+        lager:error("Rx unknown TEI ~p: ~p~n", [Req#gtp.tei, Req]),
+        {noreply, State};
+    Sess ->
+        #{{v2_bearer_context,0} := #v2_bearer_context{instance = 0, group = BearerIE}} = IEs,
+        #{{v2_eps_bearer_id,0} := #v2_eps_bearer_id{instance = 0, eps_bearer_id = Ebi}} = BearerIE,
+        #{{v2_fully_qualified_tunnel_endpoint_identifier,Ebi} :=
+            #v2_fully_qualified_tunnel_endpoint_identifier{
+                instance = Ebi,
+                interface_type = _Interface,
+                key = RemoteDataTei, ipv4 = _IP4, ipv6 = _IP6}} = BearerIE,
+        Sess1 = gtp_session_add_bearer(Sess, #gtp_bearer{ebi = Ebi, remote_data_tei = RemoteDataTei}), % TODO: teid
+        State1 = update_gtp_session(Sess, Sess1, State),
+        Resp = gen_create_bearer_response(Req, Sess1, request_accepted, State1),
+        tx_gtp(Resp, State1),
+        {noreply, State}
+    end;
+
+rx_gtp(Req = #gtp{version = v2, type = delete_bearer_request, ie = IEs}, State) ->
     Sess = find_gtp_session_by_local_teic(Req#gtp.tei, State),
     case Sess of
         undefined ->
             lager:error("Rx unknown TEI ~p: ~p~n", [Req#gtp.tei, Req]),
             {noreply, State};
         Sess ->
+            #{{v2_cause,0} := _CauseIE,
+              {v2_eps_bearer_id,0} := #v2_eps_bearer_id{instance = 0, eps_bearer_id = Ebi}} = IEs,
+            % GtpCause = gtp_utils:enum_v2_cause(CauseIE#v2_cause.v2_cause)
+            Bearer = gtp_session_find_bearer_by_ebi(Sess, Ebi),
             Resp = gen_delete_bearer_response(Req, Sess, request_accepted, State),
             tx_gtp(Resp, State),
             epdg_ue_fsm:received_gtpc_delete_bearer_request(Sess#gtp_session.pid),
-            State1 = delete_gtp_session(Sess, State),
+            Sess1 = gtp_session_del_bearer(Sess, Bearer),
+            State1 = update_gtp_session(Sess, Sess1, State),
             {noreply, State1}
         end;
 
@@ -398,6 +436,36 @@ gen_delete_session_request(#gtp_session{remote_control_tei = RemoteCtlTEI} = Ses
     ],
     #gtp{version = v2, type = delete_session_request, tei = RemoteCtlTEI, seq_no = SeqNo, ie = IEs}.
 
+gen_create_bearer_response(Req = #gtp{version = v2, type = create_bearer_request},
+                           Sess = #gtp_session{remote_control_tei = RemoteCtlTEI},
+                           GtpCause,
+                           #gtp_state{laddr = LocalAddr,
+                                      restart_counter = RCnt}) ->
+    Bearer = gtp_session_default_bearer(Sess),
+    BearersIE = [#v2_bearer_level_quality_of_service{
+        pci = 1, pl = 10, pvi = 0, label = 8,
+        maximum_bit_rate_for_uplink      = 0,
+        maximum_bit_rate_for_downlink    = 0,
+        guaranteed_bit_rate_for_uplink   = 0,
+        guaranteed_bit_rate_for_downlink = 0
+        },
+        #v2_eps_bearer_id{eps_bearer_id = Bearer#gtp_bearer.ebi},
+        #v2_fully_qualified_tunnel_endpoint_identifier{
+        instance = 0,
+        interface_type = 31, %% "S2b-U ePDG GTP-U"
+        key = Bearer#gtp_bearer.local_data_tei,
+        ipv4 = gtp_utils:ip_to_bin(LocalAddr)
+        }
+    ],
+    IEs = [#v2_cause{v2_cause = GtpCause},
+           #v2_bearer_context{group = BearersIE},
+           #v2_recovery{restart_counter = RCnt}
+    ],
+    #gtp{version = v2,
+         type = create_bearer_response,
+         tei = RemoteCtlTEI,
+         seq_no = Req#gtp.seq_no,
+         ie = IEs}.
 
 gen_delete_bearer_response(Req = #gtp{version = v2, type = delete_bearer_request},
                            Sess = #gtp_session{remote_control_tei = RemoteCtlTEI},
