@@ -75,7 +75,7 @@
         seq_no          :: 0..16#ffffffff,
         next_local_control_tei = 1 :: 0..16#ffffffff,
         next_local_data_tei = 1 :: 0..16#ffffffff,
-        sessions = sets:new()
+        sessions = sets:new() :: sets:set()
 }).
 
 -record(gtp_bearer, {
@@ -91,7 +91,8 @@
     ue_ip                  :: inet:ip_address(),
     local_control_tei = 0  :: non_neg_integer(),
     remote_control_tei = 0 :: non_neg_integer(),
-    bearer                 :: gtp_bearer %% FIXME: only one bearer for now
+    default_bearer_id      :: non_neg_integer(),
+    bearers = sets:new()    :: sets:set()
 }).
 
 start_link(LocalAddr, LocalPort, RemoteAddr, RemotePort, Options) ->
@@ -200,7 +201,7 @@ terminate(_Reason, _State) ->
 
 new_gtp_session(Imsi, Pid, State) ->
     % TODO: find non-used local TEI inside State
-    Bearer = #gtp_bearer{
+    DefaultBearer = #gtp_bearer{
         ebi = 5,
         local_data_tei = State#gtp_state.next_local_data_tei
     },
@@ -208,7 +209,8 @@ new_gtp_session(Imsi, Pid, State) ->
         pid = Pid,
         apn = ?APN,
         local_control_tei = State#gtp_state.next_local_control_tei,
-        bearer = Bearer
+        default_bearer_id = DefaultBearer#gtp_bearer.ebi,
+        bearers = sets:add_element(DefaultBearer, sets:new())
     },
     NewSt = State#gtp_state{next_local_control_tei = State#gtp_state.next_local_control_tei + 1,
                             next_local_data_tei = State#gtp_state.next_local_data_tei + 1,
@@ -241,6 +243,19 @@ update_gtp_session(OldSess, NewSess, State) ->
 delete_gtp_session(Sess, State) ->
     SetRemoved = sets:del_element(Sess, State#gtp_state.sessions),
     State#gtp_state{sessions = SetRemoved}.
+
+gtp_session_find_bearer_by_ebi(Sess, Ebi) ->
+    {Ebi, Res} = sets:fold(
+                    fun(BearerIt = #gtp_bearer{ebi = LookupEbi}, {LookupEbi, _AccIn}) -> {LookupEbi, BearerIt};
+                       (_, AccIn) -> AccIn
+                    end,
+                    {Ebi, undefined},
+                    Sess#gtp_session.bearers),
+    Res.
+
+gtp_session_default_bearer(Sess) ->
+    gtp_session_find_bearer_by_ebi(Sess, Sess#gtp_session.default_bearer_id).
+
 
 update_gtp_session_from_create_session_response_ie(none, Sess) ->
     Sess;
@@ -329,11 +344,11 @@ tx_gtp(Req, State) ->
 %% 7.2.1 Create Session Request
 gen_create_session_request(#gtp_session{imsi = Imsi,
                                     apn = Apn,
-                                    local_control_tei = LocalCtlTEI,
-                                    bearer = Bearer},
+                                    local_control_tei = LocalCtlTEI} = Sess,
                            #gtp_state{laddr = LocalAddr,
                                       restart_counter = RCnt,
                                       seq_no = SeqNo}) ->
+    Bearer = gtp_session_default_bearer(Sess),
     BearersIE = [#v2_bearer_level_quality_of_service{
                     pci = 1, pl = 10, pvi = 0, label = 8,
                     maximum_bit_rate_for_uplink      = 0,
@@ -369,10 +384,10 @@ gen_create_session_request(#gtp_session{imsi = Imsi,
     #gtp{version = v2, type = create_session_request, tei = 0, seq_no = SeqNo, ie = IEs}.
 
 %% 7.2.9 Delete Session Request
-gen_delete_session_request(#gtp_session{remote_control_tei = RemoteCtlTEI,
-                                        bearer = Bearer},
+gen_delete_session_request(#gtp_session{remote_control_tei = RemoteCtlTEI} = Sess,
                            #gtp_state{laddr = LocalAddr,
                                       seq_no = SeqNo}) ->
+    Bearer = gtp_session_default_bearer(Sess),
     IEs = [#v2_eps_bearer_id{eps_bearer_id = Bearer#gtp_bearer.ebi},
            #v2_fully_qualified_tunnel_endpoint_identifier{
                instance = Bearer#gtp_bearer.ebi,
