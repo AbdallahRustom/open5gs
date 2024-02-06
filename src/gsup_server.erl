@@ -235,7 +235,8 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, _GsupMsgRx = #{message_type := s
 	{UE, State1} = find_or_new_gsups_ue(Imsi, State0),
 	case epdg_ue_fsm:auth_request(UE#gsups_ue.pid) of
 	ok -> ok;
-	{error, _} ->
+	{error, Err} ->
+		lager:error("Auth Req for Imsi ~p failed: ~p~n", [Imsi, Err]),
 		Resp = #{message_type => send_auth_info_err,
 			 imsi => Imsi,
 			 message_class => 5,
