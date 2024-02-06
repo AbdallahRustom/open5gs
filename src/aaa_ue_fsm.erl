@@ -45,7 +45,7 @@
 -export([state_new/3, state_wait_swx_maa/3, state_wait_swx_saa/3, state_authenticated/3, state_authenticated_wait_swx_saa/3]).
 
 -record(ue_fsm_data, {
-        imsi             = unknown :: binary(),
+        imsi             = unknown :: string(),
         apn                        :: string(),
         epdg_sess_active = false   :: boolean(),
         pgw_sess_active  = false   :: boolean(),
@@ -53,7 +53,7 @@
         }).
 
 start_link(Imsi) ->
-        ServerName = lists:concat([?NAME, "_", binary_to_list(Imsi)]),
+        ServerName = lists:concat([?NAME, "_", Imsi]),
         lager:info("ue_fsm start_link(~p)~n", [ServerName]),
         gen_statem:start_link({local, list_to_atom(ServerName)}, ?MODULE, Imsi, [{debug, [trace]}]).
 

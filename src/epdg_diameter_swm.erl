@@ -11,7 +11,7 @@
 }).
 
 -record(swm_session, {
-	imsi                   :: binary(),
+	imsi                   :: string(),
 	pid                    :: pid()
     }).
 
@@ -34,7 +34,9 @@ init([]) ->
 
 
 auth_request(Imsi) ->
-	Result = gen_server:call(?SERVER, {epdg_auth_req, Imsi}),
+	% In Diameter we use Imsi as strings, as done by diameter module.
+	ImsiStr = binary_to_list(Imsi),
+	Result = gen_server:call(?SERVER, {epdg_auth_req, ImsiStr}),
 	case Result of
 		{ok, _Mar} ->
 			epdg_ue_fsm:received_swm_auth_response(self(), Result),
@@ -44,7 +46,9 @@ auth_request(Imsi) ->
 
 % Rx "GSUP CEAI LU Req" is our way of saying Rx "Swm Diameter-EAP REQ (DER) with EAP AVP containing successuful auth":
 auth_compl_request(Imsi, Apn) ->
-	Result = gen_server:call(?SERVER, {epdg_auth_compl_req, Imsi, Apn}),
+	% In Diameter we use Imsi as strings, as done by diameter module.
+	ImsiStr = binary_to_list(Imsi),
+	Result = gen_server:call(?SERVER, {epdg_auth_compl_req, ImsiStr, Apn}),
 	case Result of
 		{ok, _Mar} ->
 			epdg_ue_fsm:received_swm_auth_compl_response(self(), Result),
@@ -54,7 +58,9 @@ auth_compl_request(Imsi, Apn) ->
 
 % 3GPP TS 29.273 7.1.2.3
 session_termination_request(Imsi) ->
-	Result = gen_server:call(?SERVER, {str, Imsi}),
+	% In Diameter we use Imsi as strings, as done by diameter module.
+	ImsiStr = binary_to_list(Imsi),
+	Result = gen_server:call(?SERVER, {str, ImsiStr}),
 	case Result of
 		{ok, _Mar} ->
 			epdg_ue_fsm:received_swm_session_terminate_answer(self(), Result),

@@ -12,7 +12,7 @@
 }).
 
 -record(swm_session, {
-	imsi       :: binary(),
+	imsi       :: string(),
 	pid        :: pid()
 	}).
 
