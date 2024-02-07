@@ -19,7 +19,6 @@
 -export([start_link/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3, terminate/2]).
--export([get_ue_fsm_by_imsi/1]).
 
 -export([auth_request/1, auth_compl_request/2, session_termination_request/1]).
 -export([auth_response/2, auth_compl_response/2, session_termination_answer/2]).
@@ -32,9 +31,6 @@ start_link() ->
 init([]) ->
 	TableId = ets:new(auth_req, [bag, named_table]),
 	{ok, #swm_state{table_id = TableId}}.
-
-get_ue_fsm_by_imsi(Imsi) ->
-	_Result = gen_server:call(?SERVER, {get_ue_fsm_by_imsi, Imsi}).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Tx over emulated SWm wire:
@@ -100,16 +96,6 @@ handle_cast(Info, S) ->
 handle_info(Info, S) ->
 	error_logger:error_report(["unknown handle_info", {module, ?MODULE}, {info, Info}, {state, S}]),
 	{noreply, S}.
-
-handle_call({get_ue_fsm_by_imsi, Imsi}, _From, State) ->
-	Sess = find_swm_session_by_imsi(Imsi, State),
-	lager:debug("find_swm_session_by_imsi(~p) returned ~p~n", [Imsi, Sess]),
-	case Sess of
-	#swm_session{} ->
-		{reply, {ok ,Sess#swm_session.pid}, State};
-	undefined ->
-		{reply, {error, imsi_unknown}, State}
-	end;
 
 handle_call({epdg_auth_resp, Imsi, Result}, _From, State) ->
 	epdg_diameter_swm:auth_response(Imsi, Result),

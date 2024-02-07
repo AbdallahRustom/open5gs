@@ -40,6 +40,7 @@
 
 -export([start_link/1]).
 -export([init/1,callback_mode/0,terminate/3]).
+-export([get_server_name_by_imsi/1, get_pid_by_imsi/1]).
 -export([ev_swm_auth_req/1, ev_swm_auth_compl/2, ev_rx_swm_str/1, ev_rx_swx_maa/2, ev_rx_swx_saa/2,
          ev_rx_s6b_aar/2, ev_rx_s6b_str/1]).
 -export([state_new/3, state_wait_swx_maa/3, state_wait_swx_saa/3, state_authenticated/3, state_authenticated_wait_swx_saa/3]).
@@ -52,10 +53,18 @@
         s6b_resp_pid               :: pid()
         }).
 
-start_link(Imsi) ->
+get_server_name_by_imsi(Imsi) ->
         ServerName = lists:concat([?NAME, "_", Imsi]),
+        list_to_atom(ServerName).
+
+get_pid_by_imsi(Imsi) ->
+        ServerName = get_server_name_by_imsi(Imsi),
+        whereis(ServerName).
+
+start_link(Imsi) ->
+        ServerName = get_server_name_by_imsi(Imsi),
         lager:info("ue_fsm start_link(~p)~n", [ServerName]),
-        gen_statem:start_link({local, list_to_atom(ServerName)}, ?MODULE, Imsi, [{debug, [trace]}]).
+        gen_statem:start_link({local, ServerName}, ?MODULE, Imsi, [{debug, [trace]}]).
 
 ev_swm_auth_req(Pid) ->
         lager:info("ue_fsm ev_swm_auth_req~n", []),

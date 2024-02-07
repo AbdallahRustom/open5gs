@@ -59,15 +59,15 @@ handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) wh
            'Auth-Request-Type' = AuthReqType,
            'User-Name' = [UserName],
            'Service-Selection' = [Apn]} = Req,
-    Result = aaa_diameter_swm:get_ue_fsm_by_imsi(UserName),
-    case Result of
-    {ok, Pid} ->
-        ok = aaa_ue_fsm:ev_rx_s6b_aar(Pid, Apn),
+    PidRes = aaa_ue_fsm:get_pid_by_imsi(UserName),
+    case PidRes of
+    PidRes when is_pid(PidRes) ->
+        ok = aaa_ue_fsm:ev_rx_s6b_aar(PidRes, Apn),
         lager:debug("Waiting for S6b AAA~n", []),
         receive
             {aaa, ResultCode} -> lager:debug("Rx AAA with ResultCode=~p~n", [ResultCode])
         end;
-    _ -> lager:error("Error looking up FSM for IMSI~n", [UserName]),
+    undefined -> lager:error("Error looking up FSM for IMSI~n", [UserName]),
          ResultCode = ?'RULE-FAILURE-CODE_CM_AUTHORIZATION_REJECTED'
     end,
     Resp = #'AAA'{'Session-Id'= SessionId,
@@ -88,10 +88,10 @@ handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) wh
            'Auth-Application-Id' = _AuthAppId,
            'Termination-Cause' = _TermCause,
            'User-Name' = [UserName]} = Req,
-    Result = aaa_diameter_swm:get_ue_fsm_by_imsi(UserName),
-    case Result of
-    {ok, Pid} ->
-        case aaa_ue_fsm:ev_rx_s6b_str(Pid) of
+    PidRes = aaa_ue_fsm:get_pid_by_imsi(UserName),
+    case PidRes of
+    PidRes when is_pid(PidRes) ->
+        case aaa_ue_fsm:ev_rx_s6b_str(PidRes) of
         ok ->
             lager:debug("Waiting for S6b STA~n", []),
             receive
@@ -104,7 +104,7 @@ handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) wh
         {error, _} ->
             ResultCode = ?'RULE-FAILURE-CODE_CM_AUTHORIZATION_REJECTED'
         end;
-    _ -> lager:error("Error looking up FSM for IMSI~n", [UserName]),
+    undefined -> lager:error("Error looking up FSM for IMSI~n", [UserName]),
         ResultCode = ?'RULE-FAILURE-CODE_CM_AUTHORIZATION_REJECTED'
     end,
     % 3GPP TS 29.273 9.2.2.3.2 Session-Termination-Answer (STA) Command:
