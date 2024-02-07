@@ -198,7 +198,7 @@ handle_cast({purge_ms_response, {Imsi, Result}}, State0) ->
 				}
 	end,
 	tx_gsup(Socket, Resp),
-	State1 = delete_gsups_ue(Imsi, State0),
+	State1 = delete_gsups_ue_by_imsi(Imsi, State0),
 	{noreply, State1};
 
 % Our GSUP CEAI implementation for "IKEv2 Information Delete Request"
@@ -244,7 +244,7 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, _GsupMsgRx = #{message_type := s
 		},
 		tx_gsup(Socket, Resp),
 		epdg_ue_fsm:stop(UE#gsups_ue.pid),
-		State2 = delete_gsups_ue(Imsi, State1)
+		State2 = delete_gsups_ue(UE, State1)
 	end,
 	{noreply, State2};
 
@@ -331,7 +331,7 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := lo
 	lager:info("GSUP: Rx ~p~n", [GsupMsgRx]),
 	UE = find_gsups_ue_by_imsi(Imsi, State0),
 	case UE of
-	#gsups_ue{imsi = Imsi} -> State1 = delete_gsups_ue(Imsi, State0);
+	#gsups_ue{imsi = Imsi} -> State1 = delete_gsups_ue(UE, State0);
 	undefined -> State1 = State0
 	end,
 	{noreply, State1};
@@ -401,6 +401,13 @@ find_or_new_gsups_ue(Imsi, State) ->
 		new_gsups_ue(Imsi, State)
 	end.
 
-delete_gsups_ue(Imsi, State) ->
-	SetRemoved = sets:del_element(Imsi, State#gsups_state.ues),
+delete_gsups_ue(UE, State) ->
+	SetRemoved = sets:del_element(UE, State#gsups_state.ues),
+	lager:debug("Removed UE ~p from ~p~n", [UE, SetRemoved]),
 	State#gsups_state{ues = SetRemoved}.
+
+delete_gsups_ue_by_imsi(Imsi, State) ->
+	case find_gsups_ue_by_imsi(Imsi, State) of
+	undefined -> State;
+	UE-> delete_gsups_ue(UE, State)
+	end.
