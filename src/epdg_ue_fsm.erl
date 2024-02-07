@@ -39,6 +39,7 @@
 
 -export([start_link/1, stop/1]).
 -export([init/1,callback_mode/0,terminate/3]).
+-export([get_server_name_by_imsi/1, get_pid_by_imsi/1]).
 -export([auth_request/1, lu_request/1, tunnel_request/1, purge_ms_request/1]).
 -export([received_swm_auth_response/2, received_swm_auth_compl_response/2, received_swm_session_termination_answer/2]).
 -export([received_gtpc_create_session_response/2, received_gtpc_delete_session_response/2, received_gtpc_delete_bearer_request/1]).
@@ -52,10 +53,18 @@
         tear_down_gsup_cause = 0 :: integer()
         }).
 
-start_link(Imsi) ->
+get_server_name_by_imsi(Imsi) ->
         ServerName = lists:concat([?NAME, "_", binary_to_list(Imsi)]),
+        list_to_atom(ServerName).
+
+get_pid_by_imsi(Imsi) ->
+        ServerName = get_server_name_by_imsi(Imsi),
+        whereis(ServerName).
+
+start_link(Imsi) ->
+        ServerName = get_server_name_by_imsi(Imsi),
         lager:info("ue_fsm start_link(~p)~n", [ServerName]),
-        gen_statem:start_link({local, list_to_atom(ServerName)}, ?MODULE, Imsi, [{debug, [trace]}]).
+        gen_statem:start_link({local, ServerName}, ?MODULE, Imsi, [{debug, [trace]}]).
 
 stop(SrvRef) ->
         gen_statem:stop(SrvRef).
