@@ -181,7 +181,15 @@ find_or_new_swm_session(Imsi, Pid, State) ->
 	Sess = find_swm_session_by_imsi(Imsi, State),
 	case Sess of
 		#swm_session{imsi = Imsi} ->
-		{Sess, State};
+		% Update Pid since it may have changed:
+		Sess1 = Sess#swm_session{pid = Pid},
+		State1 = update_swm_session(Sess, Sess1, State),
+		{Sess1, State1};
 		undefined ->
 		new_swm_session(Imsi, Pid, State)
 	end.
+
+update_swm_session(OldSess, NewSess, State) ->
+	SetRemoved = sets:del_element(OldSess, State#swm_state.sessions),
+	SetUpdated = sets:add_element(NewSess, SetRemoved),
+	State#swm_state{sessions = SetUpdated}.
