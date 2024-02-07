@@ -234,7 +234,7 @@ handle_info({ipa_tcp_accept, Socket}, S) ->
 handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, _GsupMsgRx = #{message_type := send_auth_info_req, imsi := Imsi}}, State0) ->
 	{UE, State1} = find_or_new_gsups_ue(Imsi, State0),
 	case epdg_ue_fsm:auth_request(UE#gsups_ue.pid) of
-	ok -> ok;
+	ok -> State2 = State1;
 	{error, Err} ->
 		lager:error("Auth Req for Imsi ~p failed: ~p~n", [Imsi, Err]),
 		Resp = #{message_type => send_auth_info_err,
@@ -242,9 +242,11 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, _GsupMsgRx = #{message_type := s
 			 message_class => 5,
 			 cause => ?GSUP_CAUSE_NET_FAIL
 		},
-		tx_gsup(Socket, Resp)
+		tx_gsup(Socket, Resp),
+		epdg_ue_fsm:stop(UE#gsups_ue.pid),
+		State2 = delete_gsups_ue(Imsi, State1)
 	end,
-	{noreply, State1};
+	{noreply, State2};
 
 % location update request / when a UE wants to connect to a specific APN. This will trigger a AAA->HLR Request Server Assignment Request
 % FIXME: add APN instead of hardcoded internet

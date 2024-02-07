@@ -37,7 +37,7 @@
 -include_lib("osmo_gsup/include/gsup_protocol.hrl").
 -include_lib("gtplib/include/gtp_packet.hrl").
 
--export([start_link/1]).
+-export([start_link/1, stop/1]).
 -export([init/1,callback_mode/0,terminate/3]).
 -export([auth_request/1, lu_request/1, tunnel_request/1, purge_ms_request/1]).
 -export([received_swm_auth_response/2, received_swm_auth_compl_response/2, received_swm_session_termination_answer/2]).
@@ -56,6 +56,9 @@ start_link(Imsi) ->
         ServerName = lists:concat([?NAME, "_", binary_to_list(Imsi)]),
         lager:info("ue_fsm start_link(~p)~n", [ServerName]),
         gen_statem:start_link({local, list_to_atom(ServerName)}, ?MODULE, Imsi, [{debug, [trace]}]).
+
+stop(SrvRef) ->
+        gen_statem:stop(SrvRef).
 
 auth_request(Pid) ->
         lager:info("ue_fsm auth_request~n", []),
