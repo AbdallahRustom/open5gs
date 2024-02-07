@@ -40,7 +40,7 @@
 -export([start_link/1, stop/1]).
 -export([init/1,callback_mode/0,terminate/3]).
 -export([get_server_name_by_imsi/1, get_pid_by_imsi/1]).
--export([auth_request/1, lu_request/1, tunnel_request/1, purge_ms_request/1]).
+-export([auth_request/2, lu_request/1, tunnel_request/1, purge_ms_request/1]).
 -export([received_swm_auth_response/2, received_swm_auth_compl_response/2, received_swm_session_termination_answer/2]).
 -export([received_gtpc_create_session_response/2, received_gtpc_delete_session_response/2, received_gtpc_delete_bearer_request/1]).
 -export([state_new/3, state_wait_auth_resp/3, state_authenticating/3, state_authenticated/3,
@@ -69,10 +69,10 @@ start_link(Imsi) ->
 stop(SrvRef) ->
         gen_statem:stop(SrvRef).
 
-auth_request(Pid) ->
+auth_request(Pid, {PdpTypeNr, Apn}) ->
         lager:info("ue_fsm auth_request~n", []),
         try
-                gen_statem:call(Pid, auth_request)
+                gen_statem:call(Pid, {auth_request, PdpTypeNr, Apn})
         catch
         exit:Err ->
                 {error, Err}
@@ -183,9 +183,9 @@ terminate(Reason, State, Data) ->
 state_new(enter, _OldState, Data) ->
         {keep_state, Data};
 
-state_new({call, From}, auth_request, Data) ->
-        lager:info("ue_fsm state_new event=auth_request, ~p~n", [Data]),
-        case epdg_diameter_swm:auth_request(Data#ue_fsm_data.imsi) of
+state_new({call, From}, {auth_request, PdpTypeNr, Apn}, Data) ->
+        lager:info("ue_fsm state_new event=auth_request {~p, ~p}, ~p~n", [PdpTypeNr, Apn, Data]),
+        case epdg_diameter_swm:auth_request(Data#ue_fsm_data.imsi, PdpTypeNr, Apn) of
         ok -> {next_state, state_wait_auth_resp, Data, [{reply,From,ok}]};
         {error, Err} -> {stop_and_reply, Err, Data, [{reply,From,{error,Err}}]}
 	end;

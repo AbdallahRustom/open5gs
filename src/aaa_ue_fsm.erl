@@ -41,7 +41,7 @@
 -export([start_link/1]).
 -export([init/1,callback_mode/0,terminate/3]).
 -export([get_server_name_by_imsi/1, get_pid_by_imsi/1]).
--export([ev_swm_auth_req/1, ev_swm_auth_compl/2, ev_rx_swm_str/1, ev_rx_swx_maa/2, ev_rx_swx_saa/2,
+-export([ev_swm_auth_req/2, ev_swm_auth_compl/2, ev_rx_swm_str/1, ev_rx_swx_maa/2, ev_rx_swx_saa/2,
          ev_rx_s6b_aar/2, ev_rx_s6b_str/1]).
 -export([state_new/3, state_wait_swx_maa/3, state_wait_swx_saa/3, state_authenticated/3, state_authenticated_wait_swx_saa/3]).
 
@@ -66,10 +66,10 @@ start_link(Imsi) ->
         lager:info("ue_fsm start_link(~p)~n", [ServerName]),
         gen_statem:start_link({local, ServerName}, ?MODULE, Imsi, [{debug, [trace]}]).
 
-ev_swm_auth_req(Pid) ->
+ev_swm_auth_req(Pid, {PdpTypeNr, Apn}) ->
         lager:info("ue_fsm ev_swm_auth_req~n", []),
         try
-                gen_statem:call(Pid, swm_auth_req)
+                gen_statem:call(Pid, {swm_auth_req, PdpTypeNr, Apn})
         catch
         exit:Err ->
                 {error, Err}
@@ -152,12 +152,12 @@ terminate(Reason, State, Data) ->
 state_new(enter, _OldState, Data) ->
         {keep_state, Data};
 
-state_new({call, From}, swm_auth_req, Data) ->
-        lager:info("ue_fsm state_new event=swm_auth_req, ~p~n", [Data]),
+state_new({call, From}, {swm_auth_req, PdpTypeNr, Apn}, Data) ->
+        lager:info("ue_fsm state_new event=swm_auth_req {~p, ~p}, ~p~n", [PdpTypeNr, Apn, Data]),
 	% request the diameter code for a tuple
 	CKey = [],
 	IntegrityKey = [],
-	case aaa_diameter_swx:multimedia_auth_request(Data#ue_fsm_data.imsi, 1, "EAP-AKA", 1, CKey, IntegrityKey) of
+	case aaa_diameter_swx:multimedia_auth_request(Data#ue_fsm_data.imsi, 1, "EAP-AKA", 1, CKey, IntegrityKey, PdpTypeNr) of
 	ok -> {next_state, state_wait_swx_maa, Data, [{reply,From,ok}]};
 	{error, Err} -> {keep_state, Data, [{reply,From,{error, Err}}]}
 	end;

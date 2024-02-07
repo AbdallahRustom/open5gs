@@ -231,9 +231,16 @@ handle_info({ipa_tcp_accept, Socket}, S) ->
 	{noreply, S#gsups_state{socket=Socket}};
 
 % send auth info / requesting authentication tuples
-handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, _GsupMsgRx = #{message_type := send_auth_info_req, imsi := Imsi}}, State0) ->
+handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := send_auth_info_req, imsi := Imsi}}, State0) ->
+	#{pdp_info_list := [PdpInfo]} = GsupMsgRx,
+	#{pdp_context_id := _PDPCtxId,
+	  pdp_address := #{address := #{},
+	                   pdp_type_nr := PdpTypeNr,
+	                   pdp_type_org := 241},
+	  access_point_name := Apn
+	 } = PdpInfo,
 	{UE, State1} = find_or_new_gsups_ue(Imsi, State0),
-	case epdg_ue_fsm:auth_request(UE#gsups_ue.pid) of
+	case epdg_ue_fsm:auth_request(UE#gsups_ue.pid, {PdpTypeNr, Apn}) of
 	ok -> State2 = State1;
 	{error, Err} ->
 		lager:error("Auth Req for Imsi ~p failed: ~p~n", [Imsi, Err]),
