@@ -40,6 +40,7 @@
 -include_lib("osmo_ss7/include/ipa.hrl").
 -include_lib("osmo_gsup/include/gsup_protocol.hrl").
 -include_lib("gtplib/include/gtp_packet.hrl").
+-include("gtp_utils.hrl").
 
 -define(SERVER, ?MODULE).
 
@@ -160,7 +161,9 @@ handle_cast({tunnel_response, {Imsi, Result}}, State) ->
 			IEs = CreateSessResp#gtp.ie,
 			%%#{{v2_bearer_context,0} := BearerMap} = IEs,
 			#{{v2_pdn_address_allocation,0} := Paa} = IEs,
-			PdpAddress = #{pdp_type_org => 1, pdp_type_nr => 16#21, address => #{ ipv4 => Paa#v2_pdn_address_allocation.address}},
+			PdpAddress = #{pdp_type_org => 1,
+				       pdp_type_nr => ?GTP_PDP_ADDR_TYPE_NR_IPv4,
+				       address => #{ ipv4 => Paa#v2_pdn_address_allocation.address}},
 			PdpInfo = #{pdp_context_id => 0,
 				pdp_address => PdpAddress,
 				access_point_name => "foobar.apn",

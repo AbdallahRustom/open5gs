@@ -42,6 +42,7 @@
 
 -include_lib("diameter_3gpp_ts29_273_swx.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
+-include("gtp_utils.hrl").
 
 %% API Function Exports
 -export([start_link/0]).
@@ -191,13 +192,13 @@ handle_call({mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey, PdpT
     % Set only the Reserved=0 byte and Prefix-Length=0
     IPv6Dyn = <<16#00:8,16#00:8>>,
     case PdpTypeNr of
-    16#21 ->
+    ?GTP_PDP_ADDR_TYPE_NR_IPv4 ->
         IPv4Opt = Ipv4Dyn,
         IPv6Opt = [];
-    16#57 ->
+    ?GTP_PDP_ADDR_TYPE_NR_IPv6 ->
         IPv4Opt = [],
         IPv6Opt = IPv6Dyn;
-    16#8d ->
+    ?GTP_PDP_ADDR_TYPE_NR_IPv4v6 ->
         IPv4Opt = Ipv4Dyn,
         IPv6Opt = IPv6Dyn;
     _ ->
