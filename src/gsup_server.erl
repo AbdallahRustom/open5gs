@@ -39,8 +39,8 @@
 -include_lib("diameter_3gpp_ts29_273_swx.hrl").
 -include_lib("osmo_ss7/include/ipa.hrl").
 -include_lib("osmo_gsup/include/gsup_protocol.hrl").
--include_lib("gtplib/include/gtp_packet.hrl").
 -include("gtp_utils.hrl").
+-include("conv.hrl").
 
 -define(SERVER, ?MODULE).
 
@@ -156,16 +156,9 @@ handle_cast({tunnel_response, {Imsi, Result}}, State) ->
 	lager:info("tunnel_response for ~p: ~p~n", [Imsi, Result]),
 	Socket = State#gsups_state.socket,
 	case Result of
-		{ok, #gtp{version = v2, type = create_session_response}} ->
-			{ok, CreateSessResp} = Result,
-			IEs = CreateSessResp#gtp.ie,
-			%%#{{v2_bearer_context,0} := BearerMap} = IEs,
-			#{{v2_pdn_address_allocation,0} := Paa} = IEs,
-			PdpAddress = #{pdp_type_org => 1,
-				       pdp_type_nr => ?GTP_PDP_ADDR_TYPE_NR_IPv4,
-				       address => #{ ipv4 => Paa#v2_pdn_address_allocation.address}},
+		{ok, #{eua := Eua}} ->
 			PdpInfo = #{pdp_context_id => 0,
-				pdp_address => PdpAddress,
+				pdp_address => conv:epdg_eua_to_gsup_pdp_address(Eua),
 				access_point_name => "foobar.apn",
 				quality_of_service => <<0, 0, 0>>,
 				pdp_charging => 0},

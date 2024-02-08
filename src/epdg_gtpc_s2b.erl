@@ -316,7 +316,12 @@ rx_gtp(Resp = #gtp{version = v2, type = create_session_response}, State0) ->
             Sess1 = update_gtp_session_from_create_session_response(Resp, Sess0),
             lager:info("s2b: Updated Session after create_session_response: ~p~n", [Sess1]),
             State1 = update_gtp_session(Sess0, Sess1, State0),
-            epdg_ue_fsm:received_gtpc_create_session_response(Sess0#gtp_session.pid, {ok, Resp}),
+            % Do GTP specific msg parsing here, pass only relevant fields:
+            #{{v2_pdn_address_allocation,0} := Paa} = Resp#gtp.ie,
+            ResInfo = #{
+                eua => conv:gtp2_paa_to_epdg_eua(Paa)
+            },
+            epdg_ue_fsm:received_gtpc_create_session_response(Sess0#gtp_session.pid, {ok, ResInfo}),
             {noreply, State1}
         end;
 

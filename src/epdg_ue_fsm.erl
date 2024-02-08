@@ -132,10 +132,10 @@ received_swm_session_termination_answer(Pid, Result) ->
                 {error, Err}
         end.
 
-received_gtpc_create_session_response(Pid, Msg) ->
-        lager:info("ue_fsm received_gtpc_create_session_response ~p~n", [Msg]),
+received_gtpc_create_session_response(Pid, Result) ->
+        lager:info("ue_fsm received_gtpc_create_session_response ~p~n", [Result]),
         try
-        gen_statem:call(Pid, {received_gtpc_create_session_response, Msg})
+        gen_statem:call(Pid, {received_gtpc_create_session_response, Result})
         catch
         exit:Err ->
                 {error, Err}

@@ -34,9 +34,11 @@
 -author('Pau Espin Pedrol <pespin@sysmocom.de>').
 
 -include_lib("osmo_gsup/include/gsup_protocol.hrl").
+-include_lib("gtplib/include/gtp_packet.hrl").
 -include_lib("gtp_utils.hrl").
+-include_lib("conv.hrl").
 
--export([cause_gtp2gsup/1]).
+-export([cause_gtp2gsup/1, gtp2_paa_to_epdg_eua/1, epdg_eua_to_gsup_pdp_address/1]).
 
 -spec cause_gtp2gsup(integer()) -> integer().
 
@@ -51,3 +53,23 @@ cause_gtp2gsup(?GTP2_CAUSE_USER_AUTHENTICATION_FAILED) -> ?GSUP_CAUSE_GSM_AUTH_U
 cause_gtp2gsup(?GTP2_CAUSE_MANDATORY_IE_INCORRECT) -> ?GSUP_CAUSE_INV_MAND_INFO;
 cause_gtp2gsup(?GTP2_CAUSE_MANDATORY_IE_MISSING) -> ?GSUP_CAUSE_INV_MAND_INFO;
 cause_gtp2gsup(_) -> ?GSUP_CAUSE_PROTO_ERR_UNSPEC.
+
+
+gtp2_paa_to_epdg_eua(#v2_pdn_address_allocation{type = ipv4, address = Addr}) ->
+        #epdg_eua{type_nr = ?GTP_PDP_ADDR_TYPE_NR_IPv4,
+                  ipv4 = Addr};
+gtp2_paa_to_epdg_eua(#v2_pdn_address_allocation{type = ipv6, address = Addr}) ->
+        #epdg_eua{type_nr = ?GTP_PDP_ADDR_TYPE_NR_IPv6,
+                  ipv6 = Addr}.
+%TODO: IPv4v6
+
+epdg_eua_to_gsup_pdp_address(#epdg_eua{type_nr = ?GTP_PDP_ADDR_TYPE_NR_IPv4, ipv4 = Addr}) ->
+        #{pdp_type_org => 1,
+	  pdp_type_nr => ?GTP_PDP_ADDR_TYPE_NR_IPv4,
+	  address => #{ ipv4 => Addr}};
+
+epdg_eua_to_gsup_pdp_address(#epdg_eua{type_nr = ?GTP_PDP_ADDR_TYPE_NR_IPv6, ipv6 = Addr}) ->
+#{pdp_type_org => 1,
+        pdp_type_nr => ?GTP_PDP_ADDR_TYPE_NR_IPv6,
+        address => #{ ipv6 => Addr}}.
+%TODO: IPv4v6
