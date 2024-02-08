@@ -38,7 +38,27 @@
 -include_lib("gtp_utils.hrl").
 -include_lib("conv.hrl").
 
--export([cause_gtp2gsup/1, gtp2_paa_to_epdg_eua/1, epdg_eua_to_gsup_pdp_address/1]).
+-export([ip_to_bin/1, bin_to_ip/1]).
+-export([cause_gtp2gsup/1]).
+-export([gtp2_paa_to_epdg_eua/1, epdg_eua_to_gsup_pdp_address/1]).
+
+% ergw_aaa/src/ergw_aaa_3gpp_dict.erl
+% under GPLv2+
+ip_to_bin(IP) when is_binary(IP) ->
+        IP;
+    ip_to_bin({A, B, C, D}) ->
+        <<A, B, C, D>>;
+    ip_to_bin({A, B, C, D, E, F, G, H}) ->
+        <<A:16, B:16, C:16, D:16, E:16, F:16, G:16, H:16>>.
+
+    bin_to_ip(<<A:8, B:8, C:8, D:8>> = IP) when is_binary(IP) ->
+        {A, B, C, D};
+    bin_to_ip(<<A:16, B:16, C:16, D:16, E:16, F:16, G:16, H:16>> = IP) when is_binary(IP) ->
+        {A, B, C, D, E, F, G, H};
+    bin_to_ip({_, _, _, _} = IP) ->
+        IP;
+    bin_to_ip({_, _, _, _, _, _, _, _} = IP) ->
+        IP.
 
 -spec cause_gtp2gsup(integer()) -> integer().
 

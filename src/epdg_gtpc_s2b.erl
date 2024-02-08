@@ -258,6 +258,11 @@ gtp_session_add_bearer(Sess, Bearer) ->
     lager:debug("Add bearer ~p to session ~p~n", [Bearer, Sess]),
     Sess#gtp_session{bearers = sets:add_element(Bearer, Sess#gtp_session.bearers)}.
 
+gtp_session_update_bearer(Sess, OldBearer, NewBearer) ->
+    SetRemoved = sets:del_element(OldBearer, Sess#gtp_session.bearers),
+    SetUpdated = sets:add_element(NewBearer, SetRemoved),
+    Sess#gtp_session{bearers = SetUpdated}.
+
 gtp_session_del_bearer(Sess, Bearer) ->
     lager:debug("Remove bearer ~p from session ~p~n", [Bearer, Sess]),
     Sess1 = Sess#gtp_session{bearers = sets:del_element(Bearer, Sess#gtp_session.bearers)},
@@ -268,25 +273,6 @@ gtp_session_del_bearer(Sess, Bearer) ->
 
 gtp_session_default_bearer(Sess) ->
     gtp_session_find_bearer_by_ebi(Sess, Sess#gtp_session.default_bearer_id).
-
-
-update_gtp_session_from_create_session_response_ie(none, Sess) ->
-    Sess;
-update_gtp_session_from_create_session_response_ie({_,
-                                                    #v2_fully_qualified_tunnel_endpoint_identifier{
-                                                        interface_type = _Interface,
-                                                        key = TEI, ipv4 = _IP4, ipv6 = _IP6},
-                                                    Next}, Sess) ->
-    update_gtp_session_from_create_session_response_ie(maps:next(Next), Sess#gtp_session{remote_control_tei = TEI});
-update_gtp_session_from_create_session_response_ie({_, _, Next},
-                                                   Sess) ->
-    update_gtp_session_from_create_session_response_ie(maps:next(Next), Sess).
-
-update_gtp_session_from_create_session_response_ies(#gtp{ie = IEs}, Sess) ->
-    update_gtp_session_from_create_session_response_ie(maps:next(maps:iterator(IEs)), Sess).
-
-update_gtp_session_from_create_session_response(Resp = #gtp{version = v2, type = create_session_response}, Sess) ->
-    update_gtp_session_from_create_session_response_ies(#gtp{ie = Resp#gtp.ie}, Sess).
 
 % returns Sess if found, undefined it not
 find_gtp_session_by_local_teic(LocalControlTei, State) ->
@@ -313,13 +299,31 @@ rx_gtp(Resp = #gtp{version = v2, type = create_session_response}, State0) ->
             lager:error("Rx unknown TEI ~p: ~p~n", [Resp#gtp.tei, Resp]),
             {noreply, State0};
         Sess0 ->
-            Sess1 = update_gtp_session_from_create_session_response(Resp, Sess0),
-            lager:info("s2b: Updated Session after create_session_response: ~p~n", [Sess1]),
-            State1 = update_gtp_session(Sess0, Sess1, State0),
             % Do GTP specific msg parsing here, pass only relevant fields:
-            #{{v2_pdn_address_allocation,0} := Paa} = Resp#gtp.ie,
+            #{{v2_fully_qualified_tunnel_endpoint_identifier,1} :=
+                #v2_fully_qualified_tunnel_endpoint_identifier{
+                    interface_type = 30, %% "S2b ePDG GTP-C"
+                    key = RemoteTEIC, ipv4 = _IPc4, ipv6 = _IPc6},
+              {v2_pdn_address_allocation,0} := Paa,
+              {v2_bearer_context,0} := #v2_bearer_context{instance = 0, group = BearerIE}} = Resp#gtp.ie,
+            % Parse BearerContext:
+            #{{v2_eps_bearer_id,0} := #v2_eps_bearer_id{instance = 0, eps_bearer_id = Ebi},
+              {v2_fully_qualified_tunnel_endpoint_identifier,4} :=
+                #v2_fully_qualified_tunnel_endpoint_identifier{
+                    interface_type = 31, %% "S2b-U ePDG GTP-U"
+                    key = RemoteTEID, ipv4 = IPu4, ipv6 = IPu6}
+             } = BearerIE,
+            Bearer = gtp_session_find_bearer_by_ebi(Sess0, Ebi),
+            Sess1 = gtp_session_update_bearer(Sess0, Bearer, Bearer#gtp_bearer{remote_data_tei = RemoteTEID}),
+            Sess2 = Sess1#gtp_session{remote_control_tei = RemoteTEIC},
+            lager:info("s2b: Updated Session after create_session_response: ~p~n", [Sess2]),
+            State1 = update_gtp_session(Sess0, Sess2, State0),
             ResInfo = #{
-                eua => conv:gtp2_paa_to_epdg_eua(Paa)
+                eua => conv:gtp2_paa_to_epdg_eua(Paa),
+                local_teid => Bearer#gtp_bearer.local_data_tei,
+                remote_teid => RemoteTEID,
+                remote_ipv4 => IPu4,
+                remote_ipv6 => IPu6
             },
             epdg_ue_fsm:received_gtpc_create_session_response(Sess0#gtp_session.pid, {ok, ResInfo}),
             {noreply, State1}
@@ -406,7 +410,7 @@ gen_create_session_request(#gtp_session{imsi = Imsi,
                     instance = Bearer#gtp_bearer.ebi,
                     interface_type = 31, %% "S2b-U ePDG GTP-U"
                     key = Bearer#gtp_bearer.local_data_tei,
-                    ipv4 = gtp_utils:ip_to_bin(LocalAddr)
+                    ipv4 = conv:ip_to_bin(LocalAddr)
                   }
                 ],
     IEs = [#v2_recovery{restart_counter = RCnt},
@@ -416,7 +420,7 @@ gen_create_session_request(#gtp_session{imsi = Imsi,
                 instance = 0,
                 interface_type = 30, %% "S2b ePDG GTP-C"
                 key = LocalCtlTEI,
-                ipv4 = gtp_utils:ip_to_bin(LocalAddr)
+                ipv4 = conv:ip_to_bin(LocalAddr)
             },
             #v2_access_point_name{instance = 0, apn = [Apn]},
             #v2_selection_mode{mode = 0},
@@ -438,7 +442,7 @@ gen_delete_session_request(#gtp_session{remote_control_tei = RemoteCtlTEI} = Ses
                instance = 0,
                interface_type = 30, %% "S2b ePDG GTP-C"
                key = Bearer#gtp_bearer.local_data_tei,
-               ipv4 = gtp_utils:ip_to_bin(LocalAddr)
+               ipv4 = conv:ip_to_bin(LocalAddr)
            }
     ],
     #gtp{version = v2, type = delete_session_request, tei = RemoteCtlTEI, seq_no = SeqNo, ie = IEs}.
@@ -461,7 +465,7 @@ gen_create_bearer_response(Req = #gtp{version = v2, type = create_bearer_request
         instance = 0,
         interface_type = 31, %% "S2b-U ePDG GTP-U"
         key = Bearer#gtp_bearer.local_data_tei,
-        ipv4 = gtp_utils:ip_to_bin(LocalAddr)
+        ipv4 = conv:ip_to_bin(LocalAddr)
         }
     ],
     IEs = [#v2_cause{v2_cause = GtpCause},

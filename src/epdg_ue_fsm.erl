@@ -244,6 +244,16 @@ state_authenticated({call, From}, tunnel_request, Data) ->
 
 state_authenticated({call, From}, {received_gtpc_create_session_response, Result}, Data) ->
         lager:info("ue_fsm state_authenticated event=received_gtpc_create_session_response, ~p~n", [Data]),
+        case Result of
+        {ok, ResInfo} ->
+                #{eua := EUA,
+                  local_teid := LocalTEID,
+                  remote_teid := RemoteTEID,
+                  remote_ipv4 := RemoteIPv4 % TODO: remote_ipv6
+                 } = ResInfo,
+                gtp_u_tun:create_pdp_context(RemoteIPv4, EUA, LocalTEID, RemoteTEID);
+        _ -> ok
+        end,
         gsup_server:tunnel_response(Data#ue_fsm_data.imsi, Result),
         {keep_state, Data, [{reply,From,ok}]};
 
