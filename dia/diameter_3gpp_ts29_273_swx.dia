@@ -46,6 +46,7 @@
 @inherits diameter_rfc5447
 @inherits diameter_rfc5580
 @inherits diameter_rfc5778
+@inherits diameter_rfc7155
 @inherits diameter_rfc7683
 @inherits diameter_rfc7944
 @inherits diameter_rfc8583
