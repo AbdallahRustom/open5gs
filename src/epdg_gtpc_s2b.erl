@@ -302,7 +302,7 @@ rx_gtp(Resp = #gtp{version = v2, type = create_session_response}, State0) ->
             % Do GTP specific msg parsing here, pass only relevant fields:
             #{{v2_fully_qualified_tunnel_endpoint_identifier,1} :=
                 #v2_fully_qualified_tunnel_endpoint_identifier{
-                    interface_type = 30, %% "S2b ePDG GTP-C"
+                    interface_type = 32, %% "S2b PGW GTP-C"
                     key = RemoteTEIC, ipv4 = _IPc4, ipv6 = _IPc6},
               {v2_pdn_address_allocation,0} := Paa,
               {v2_bearer_context,0} := #v2_bearer_context{instance = 0, group = BearerIE}} = Resp#gtp.ie,
@@ -310,7 +310,7 @@ rx_gtp(Resp = #gtp{version = v2, type = create_session_response}, State0) ->
             #{{v2_eps_bearer_id,0} := #v2_eps_bearer_id{instance = 0, eps_bearer_id = Ebi},
               {v2_fully_qualified_tunnel_endpoint_identifier,4} :=
                 #v2_fully_qualified_tunnel_endpoint_identifier{
-                    interface_type = 31, %% "S2b-U ePDG GTP-U"
+                    interface_type = 33, %% "S2b-U PGW GTP-U"
                     key = RemoteTEID, ipv4 = IPu4, ipv6 = IPu6}
              } = BearerIE,
             Bearer = gtp_session_find_bearer_by_ebi(Sess0, Ebi),
