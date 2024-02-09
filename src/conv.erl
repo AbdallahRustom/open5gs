@@ -41,6 +41,7 @@
 -export([ip_to_bin/1, bin_to_ip/1]).
 -export([cause_gtp2gsup/1]).
 -export([gtp2_paa_to_epdg_eua/1, epdg_eua_to_gsup_pdp_address/1]).
+-export([nai_to_imsi/1]).
 
 % ergw_aaa/src/ergw_aaa_3gpp_dict.erl
 % under GPLv2+
@@ -93,3 +94,12 @@ epdg_eua_to_gsup_pdp_address(#epdg_eua{type_nr = ?GTP_PDP_ADDR_TYPE_NR_IPv6, ipv
         pdp_type_nr => ?GTP_PDP_ADDR_TYPE_NR_IPv6,
         address => #{ ipv6 => Addr}}.
 %TODO: IPv4v6
+
+% 3GPP TS 23.003 clause 19
+% Input: "<IMSI>@nai.epc.mnc<MNC>.mcc<MCC>.3gppnetwork.org"
+% % TODO: lead number prefix
+nai_to_imsi(NAI) ->
+    NAIRev = string:reverse(NAI),
+    ImsiRev = string:find(NAIRev, "@", trailing),
+    ImsiRev2 = string:trim(ImsiRev, leading, "@"),
+    string:reverse(ImsiRev2).

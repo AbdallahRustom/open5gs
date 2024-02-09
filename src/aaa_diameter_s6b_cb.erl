@@ -59,7 +59,8 @@ handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) wh
            'Auth-Request-Type' = AuthReqType,
            'User-Name' = [UserName],
            'Service-Selection' = [Apn]} = Req,
-    PidRes = aaa_ue_fsm:get_pid_by_imsi(UserName),
+    Imsi = conv:nai_to_imsi(UserName),
+    PidRes = aaa_ue_fsm:get_pid_by_imsi(Imsi),
     case PidRes of
     PidRes when is_pid(PidRes) ->
         ok = aaa_ue_fsm:ev_rx_s6b_aar(PidRes, Apn),
@@ -67,7 +68,7 @@ handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) wh
         receive
             {aaa, ResultCode} -> lager:debug("Rx AAA with ResultCode=~p~n", [ResultCode])
         end;
-    undefined -> lager:error("Error looking up FSM for IMSI~n", [UserName]),
+    undefined -> lager:error("Error looking up FSM for IMSI~n", [Imsi]),
          ResultCode = ?'RULE-FAILURE-CODE_CM_AUTHORIZATION_REJECTED'
     end,
     Resp = #'AAA'{'Session-Id'= SessionId,
