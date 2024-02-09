@@ -228,13 +228,18 @@ handle_info({ipa_tcp_accept, Socket}, S) ->
 
 % send auth info / requesting authentication tuples
 handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := send_auth_info_req, imsi := Imsi}}, State0) ->
-	#{pdp_info_list := [PdpInfo]} = GsupMsgRx,
-	#{pdp_context_id := _PDPCtxId,
-	  pdp_address := #{address := #{},
-	                   pdp_type_nr := PdpTypeNr,
-	                   pdp_type_org := 241},
-	  access_point_name := Apn
-	 } = PdpInfo,
+	case maps:find(pdp_info_list, GsupMsgRx) of
+	{ok, [PdpInfo]} ->
+		#{pdp_context_id := _PDPCtxId,
+		  pdp_address := #{address := #{},
+				   pdp_type_nr := PdpTypeNr,
+				   pdp_type_org := 241},
+		  access_point_name := Apn
+		} = PdpInfo;
+	error -> % Use some sane defaults:
+		PdpTypeNr = ?GTP_PDP_ADDR_TYPE_NR_IPv4,
+		Apn = "*"
+	end,
 	{UE, State1} = find_or_new_gsups_ue(Imsi, State0),
 	case epdg_ue_fsm:auth_request(UE#gsups_ue.pid, {PdpTypeNr, Apn}) of
 	ok -> State2 = State1;
