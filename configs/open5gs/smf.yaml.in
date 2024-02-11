@@ -354,3 +354,9 @@ smf:
 #    confidentiality_protection_indication: required|preferred|not-needed
 #    maximum_integrity_protected_data_rate_uplink: bitrate64kbs|maximum-UE-rate
 #    maximum_integrity_protected_data_rate_downlink: bitrate64kbs|maximum-UE-rate
+#cdr:
+#      enabled: True
+#      file_capture_period_sec: 1800
+#      reporting_period_sec: 10
+#      log_dir: /var/log/open5gs
+#      sgw_name: SGW-01
