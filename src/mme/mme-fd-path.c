@@ -722,6 +722,8 @@ void mme_s6a_send_air(mme_ue_t *mme_ue,
     ogs_assert(ret == 0);
 
     /* Set the Destination-Realm AVP */
+    
+    DiamId_t dest_realm = ogs_set_realm_from_imsi_bcd(mme_ue->imsi_bcd);
     ret = fd_msg_avp_new(ogs_diam_destination_realm, 0, &avp);
     ogs_assert(ret == 0);
     val.os.data = (unsigned char *)(fd_g_config->cnf_diamrlm);
@@ -1124,6 +1126,7 @@ void mme_s6a_send_ulr(mme_ue_t *mme_ue)
     ogs_assert(ret == 0);
 
     /* Set the Destination-Realm AVP */
+    DiamId_t dest_realm = ogs_set_realm_from_imsi_bcd(mme_ue->imsi_bcd);
     ret = fd_msg_avp_new(ogs_diam_destination_realm, 0, &avp);
     ogs_assert(ret == 0);
     val.os.data = (unsigned char *)(fd_g_config->cnf_diamrlm);
@@ -1280,6 +1283,7 @@ void mme_s6a_send_pur(mme_ue_t *mme_ue)
     ogs_assert(ret == 0);
 
     /* Set the Destination-Realm AVP */
+    DiamId_t dest_realm = ogs_set_realm_from_imsi_bcd(mme_ue->imsi_bcd);
     ret = fd_msg_avp_new(ogs_diam_destination_realm, 0, &avp);
     ogs_assert(ret == 0);
     val.os.data = (unsigned char *)(fd_g_config->cnf_diamrlm);
