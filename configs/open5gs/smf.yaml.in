@@ -360,3 +360,14 @@ smf:
 #      reporting_period_sec: 10
 #      log_dir: /var/log/open5gs
 #      sgw_name: SGW-01
+
+################################################################################
+# Add support of travelping UPG
+################################################################################
+
+#    o Add support for travelping upg pgw:
+#      travelping upg needs nwi network instance name 
+#      to route traffic to/from sgi interface
+#
+#    use_upg : true
+#    sgi_nwi : sgi
