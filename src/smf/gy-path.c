@@ -693,8 +693,7 @@ void smf_gy_send_ccr(smf_sess_t *sess, void *xact,
         cc_request_type == OGS_DIAM_GY_CC_REQUEST_TYPE_EVENT_REQUEST)
         sess_data->cc_request_number = 0;
     else
-        /* Cyclic request number from 0 -> MAX_CC_REQUEST_NUMBER - 1 then back to 0 */
-        sess_data->cc_request_number = (sess_data->cc_request_number + 1) % MAX_CC_REQUEST_NUMBER;
+        sess_data->cc_request_number++;
 
     ogs_debug("    CC Request Type[%d] Number[%d]",
         sess_data->cc_request_type, sess_data->cc_request_number);
