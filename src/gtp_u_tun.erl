@@ -36,7 +36,7 @@
 -author('Pau Espin Pedrol <pespin@sysmocom.de>').
 -include("conv.hrl").
 
--export([create_pdp_context/4]).
+-export([create_pdp_context/1, delete_pdp_context/1]).
 
 %%%%%%%%%%%%%%%%%%%%%%
 %%% Internal API
@@ -57,12 +57,20 @@ get_env_gtp_u_kmod_server_ref() ->
 %%%%%%%%%%%%%%%%%%%%%%
 
 % Create a PDP Context on the GTP tundev
-create_pdp_context(PeerAddr, EUA, LocalTEID, RemoteTEID) ->
-        %SGSNaddr = {127,0,0,1}, % TODO: This should be set to the GTP-U IP address provided by the PGW
-        %EUA = {127,0,0,1}, % TODO: This should be set to the EUA IP address provided by the PGW
-        %LocalTEID = 1234, % TODO: this should be set to our locally generated TEID.
-        %RemoteTEID = 56768, % TODO: this should be set to TEID obtained from CreateSessionResponse
+create_pdp_context(#epdg_tun_pdp_ctx{local_teid = LocalTEID,
+                                     remote_teid = RemoteTEID,
+                                     eua = EUA,
+                                     peer_addr = PeerAddr}) ->
         PeerIP = conv:bin_to_ip(PeerAddr), % TODO: IPv6
         UEIP = conv:bin_to_ip(EUA#epdg_eua.ipv4), % TODO: IPv6.
         ServRef = get_env_gtp_u_kmod_server_ref(),
         gen_server:call(ServRef, {create_pdp_context, PeerIP, LocalTEID, RemoteTEID, UEIP}).
+
+delete_pdp_context(#epdg_tun_pdp_ctx{local_teid = LocalTEID,
+                                     remote_teid = RemoteTEID,
+                                     eua = EUA,
+                                     peer_addr = PeerAddr}) ->
+        PeerIP = conv:bin_to_ip(PeerAddr), % TODO: IPv6
+        UEIP = conv:bin_to_ip(EUA#epdg_eua.ipv4), % TODO: IPv6.
+        ServRef = get_env_gtp_u_kmod_server_ref(),
+        gen_server:call(ServRef, {delete_pdp_context, PeerIP, LocalTEID, RemoteTEID, UEIP}).

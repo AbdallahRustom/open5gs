@@ -36,6 +36,7 @@
 
 -include_lib("osmo_gsup/include/gsup_protocol.hrl").
 -include_lib("gtplib/include/gtp_packet.hrl").
+-include("conv.hrl").
 
 -export([start_link/1, stop/1]).
 -export([init/1,callback_mode/0,terminate/3]).
@@ -50,6 +51,7 @@
 -record(ue_fsm_data, {
         imsi,
         apn = "internet" :: string(),
+        tun_pdp_ctx :: epdg_tun_pdp_ctx,
         tear_down_gsup_needed = false :: boolean(), %% need to send GSUP PurgeMSResp after STR+STA?
         tear_down_gsup_cause = 0 :: integer()
         }).
@@ -179,6 +181,10 @@ callback_mode() ->
 
 terminate(Reason, State, Data) ->
         lager:info("terminating ~p with reason ~p state=~p, ~p~n", [?MODULE, Reason, State, Data]),
+        case Data#ue_fsm_data.tun_pdp_ctx of
+        undefined -> ok;
+        _ -> gtp_u_tun:delete_pdp_context(Data#ue_fsm_data.tun_pdp_ctx)
+        end,
         ok.
 
 state_new(enter, _OldState, Data) ->
@@ -278,12 +284,15 @@ state_wait_create_session_resp({call, From}, {received_gtpc_create_session_respo
                   remote_teid := RemoteTEID,
                   remote_ipv4 := RemoteIPv4 % TODO: remote_ipv6
                   } = ResInfo,
-                Ret = gtp_u_tun:create_pdp_context(RemoteIPv4, EUA, LocalTEID, RemoteTEID),
-                lager:debug("gtp_u_tun:create_pdp_context(~p) returned ~p~n", [ResInfo, Ret]);
-        _ -> ok
+                TunPdpCtx = #epdg_tun_pdp_ctx{local_teid = LocalTEID, remote_teid = RemoteTEID,
+                                              eua = EUA, peer_addr = RemoteIPv4},
+                Ret = gtp_u_tun:create_pdp_context(TunPdpCtx),
+                lager:debug("gtp_u_tun:create_pdp_context(~p) returned ~p~n", [ResInfo, Ret]),
+                Data1 = Data#ue_fsm_data{tun_pdp_ctx = TunPdpCtx};
+        _ -> Data1 = Data
         end,
-        gsup_server:tunnel_response(Data#ue_fsm_data.imsi, Result),
-        {next_state, state_active, Data, [{reply,From,ok}]};
+        gsup_server:tunnel_response(Data1#ue_fsm_data.imsi, Result),
+        {next_state, state_active, Data1, [{reply,From,ok}]};
 
 state_wait_create_session_resp({call, From}, Event, Data) ->
         lager:error("ue_fsm state_wait_delete_session_resp: Unexpected call event ~p, ~p~n", [Event, Data]),
@@ -299,19 +308,24 @@ state_active(enter, _OldState, Data) ->
 
 state_active({call, _From}, {auth_request, PdpTypeNr, Apn}, Data) ->
         lager:info("ue_fsm state_active event=auth_request {~p, ~p}, ~p~n", [PdpTypeNr, Apn, Data]),
-        {next_state, state_new, Data, [postpone]};
+        gtp_u_tun:delete_pdp_context(Data#ue_fsm_data.tun_pdp_ctx),
+        Data1 = Data#ue_fsm_data{tun_pdp_ctx = undefined},
+        {next_state, state_new, Data1, [postpone]};
 
 state_active({call, From}, purge_ms_request, Data) ->
         lager:info("ue_fsm state_active event=purge_ms_request, ~p~n", [Data]),
-        case epdg_gtpc_s2b:delete_session_req(Data#ue_fsm_data.imsi) of
-        ok -> {next_state, state_wait_delete_session_resp, Data, [{reply,From,ok}]};
-        {error, Err} -> {keep_state, Data, [{reply,From,{error, Err}}]}
+        gtp_u_tun:delete_pdp_context(Data#ue_fsm_data.tun_pdp_ctx),
+        Data1 = Data#ue_fsm_data{tun_pdp_ctx = undefined},
+        case epdg_gtpc_s2b:delete_session_req(Data1#ue_fsm_data.imsi) of
+        ok -> {next_state, state_wait_delete_session_resp, Data1, [{reply,From,ok}]};
+        {error, Err} -> {keep_state, Data1, [{reply,From,{error, Err}}]}
         end;
 
 state_active({call, From}, received_gtpc_delete_bearer_request, Data) ->
         lager:info("ue_fsm state_active event=received_gtpc_delete_bearer_request, ~p~n", [Data]),
+        gtp_u_tun:delete_pdp_context(Data#ue_fsm_data.tun_pdp_ctx),
         gsup_server:cancel_location_request(Data#ue_fsm_data.imsi),
-        Data1 = Data#ue_fsm_data{tear_down_gsup_needed = false},
+        Data1 = Data#ue_fsm_data{tun_pdp_ctx = undefined, tear_down_gsup_needed = false},
         {next_state, state_wait_swm_session_termination_answer, Data1, [{reply,From,ok}]};
 
 state_active({call, From}, _Whatever, Data) ->

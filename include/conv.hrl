@@ -37,3 +37,9 @@
         ipv6    :: binary()
 }).
 
+-record(epdg_tun_pdp_ctx, {
+        local_teid   :: non_neg_integer(),
+        remote_teid  :: non_neg_integer(),
+        eua          :: epdg_eua,
+        peer_addr    :: binary()
+}).
