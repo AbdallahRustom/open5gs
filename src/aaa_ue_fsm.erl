@@ -245,8 +245,12 @@ state_authenticated({call, {Pid, _Tag} = From}, rx_s6b_str, Data) ->
                 end
         end;
 
-state_authenticated({call, From}, _Whatever, Data) ->
-        lager:info("ue_fsm state_authenticated event=purge_ms_request, ~p~n", [Data]),
+state_authenticated({call, _From}, {swm_auth_req, PdpTypeNr, Apn}, Data) ->
+        lager:info("ue_fsm state_authenticated event=swm_auth_req {~p, ~p}, ~p~n", [PdpTypeNr, Apn, Data]),
+        {next_state, state_new, Data, [postpone]};
+
+state_authenticated({call, From}, Ev, Data) ->
+        lager:info("ue_fsm state_authenticated: Unexpected call event ~p, ~p~n", [Ev, Data]),
         {keep_state, Data, [{reply,From,ok}]}.
 
 state_authenticated_wait_swx_saa(enter, _OldState, Data) ->

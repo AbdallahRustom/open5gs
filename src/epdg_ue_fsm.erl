@@ -237,6 +237,10 @@ state_authenticating({call, From}, {received_swm_auth_compl_response, Result}, D
 state_authenticated(enter, _OldState, Data) ->
         {keep_state, Data};
 
+state_authenticated({call, _From}, {auth_request, PdpTypeNr, Apn}, Data) ->
+        lager:info("ue_fsm state_authenticated event=auth_request {~p, ~p}, ~p~n", [PdpTypeNr, Apn, Data]),
+        {next_state, state_new, Data, [postpone]};
+
 state_authenticated({call, From}, tunnel_request, Data) ->
         lager:info("ue_fsm state_authenticated event=tunnel_request, ~p~n", [Data]),
         epdg_gtpc_s2b:create_session_req(Data#ue_fsm_data.imsi, Data#ue_fsm_data.apn),
