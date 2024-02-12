@@ -70,9 +70,9 @@
         raddr           :: inet:ip_address(),
         rport           :: non_neg_integer(),
         restart_counter :: 0..255,
-        seq_no          :: 0..16#ffffffff,
-        next_local_control_tei = 1 :: 0..16#ffffffff,
-        next_local_data_tei = 1 :: 0..16#ffffffff,
+        seq_no          :: 0..16#ffffff,
+        next_local_control_tei :: 0..16#ffffffff,
+        next_local_data_tei    :: 0..16#ffffffff,
         sessions = sets:new() :: sets:set()
 }).
 
@@ -128,7 +128,9 @@ init(State) ->
                     raddr = RemoteAddrInet,
                     rport = RemotePort,
                     restart_counter = 0,
-                    seq_no = 0
+                    seq_no = rand:uniform(16#FFFFFF),
+                    next_local_control_tei = rand:uniform(16#FFFFFFFE),
+                    next_local_data_tei = rand:uniform(16#FFFFFFFE)
                 },
             {ok, St};
         {error, Reason} ->
@@ -203,19 +205,27 @@ inc_seq_no(State) ->
     NewSeqNr = State#gtp_state.seq_no +1,
     State#gtp_state{seq_no = NewSeqNr}.
 
+% Skip 0
+inc_tei(Tei) when Tei >= 16#FFFFFFFE -> 16#00000001;
+% Skip 0xffffffff
+inc_tei(Tei) -> (Tei + 1) rem 16#FFFFFFFF.
+
+% Skip 0, 0xffffffff
+dec_tei(Tei) when Tei =< 1 -> 16#FFFFFFFE;
+dec_tei(Tei) -> (Tei - 1) rem 16#FFFFFFFF.
+
 new_gtp_session(Imsi, SessTpl, State) ->
-    % TODO: find non-used local TEI inside State
     DefaultBearer = #gtp_bearer{
         ebi = 5,
-        local_data_tei = State#gtp_state.next_local_data_tei
+        local_data_tei = find_unused_local_teid(State)
     },
     Sess = SessTpl#gtp_session{imsi = Imsi,
-        local_control_tei = State#gtp_state.next_local_control_tei,
+        local_control_tei = find_unused_local_teic(State),
         default_bearer_id = DefaultBearer#gtp_bearer.ebi,
         bearers = sets:add_element(DefaultBearer, sets:new())
     },
-    NewSt = State#gtp_state{next_local_control_tei = State#gtp_state.next_local_control_tei + 1,
-                            next_local_data_tei = State#gtp_state.next_local_data_tei + 1,
+    NewSt = State#gtp_state{next_local_control_tei = inc_tei(Sess#gtp_session.local_control_tei),
+                            next_local_data_tei = inc_tei(DefaultBearer#gtp_bearer.local_data_tei),
                             sessions = sets:add_element(Sess, State#gtp_state.sessions)},
     {Sess, NewSt}.
 
@@ -256,6 +266,15 @@ gtp_session_find_bearer_by_ebi(Sess, Ebi) ->
                     Sess#gtp_session.bearers),
     Res.
 
+gtp_session_find_bearer_by_local_teid(Sess, LocalTEID) ->
+    {LocalTEID, Res} = sets:fold(
+                    fun(BearerIt = #gtp_bearer{ebi = LookupLocalTEID}, {LookupLocalTEID, _AccIn}) -> {LookupLocalTEID, BearerIt};
+                        (_, AccIn) -> AccIn
+                    end,
+                    {LocalTEID, undefined},
+                    Sess#gtp_session.bearers),
+    Res.
+
 gtp_session_add_bearer(Sess, Bearer) ->
     lager:debug("Add bearer ~p to session ~p~n", [Bearer, Sess]),
     Sess#gtp_session{bearers = sets:add_element(Bearer, Sess#gtp_session.bearers)}.
@@ -285,6 +304,47 @@ find_gtp_session_by_local_teic(LocalControlTei, State) ->
         {LocalControlTei, undefined},
         State#gtp_state.sessions),
     Res.
+
+% returns Sess if found, undefined it not
+find_gtp_session_by_local_teid(LocalControlTeid, State) ->
+    {LocalControlTeid, Res} = sets:fold(
+        fun(SessIt = #gtp_session{}, {LookupLTEID, AccIn}) ->
+            case gtp_session_find_bearer_by_local_teid(SessIt, LookupLTEID) of
+                undefined -> {LookupLTEID, AccIn};
+                _ -> {LookupLTEID, SessIt}
+            end
+        end,
+        {LocalControlTeid, undefined},
+        State#gtp_state.sessions),
+    Res.
+
+find_unused_local_teic(State, TeicEnd, TeicEnd) ->
+    case find_gtp_session_by_local_teic(TeicEnd, State) of
+        undefined -> TeicEnd;
+        _ -> undefined
+    end;
+find_unused_local_teic(State, TeicIt, TeicEnd) ->
+    case find_gtp_session_by_local_teic(TeicIt, State) of
+    undefined -> TeicIt;
+    _ -> find_unused_local_teic(State, inc_tei(TeicIt), TeicEnd)
+    end.
+find_unused_local_teic(State) ->
+    find_unused_local_teic(State, State#gtp_state.next_local_control_tei,
+                           dec_tei(State#gtp_state.next_local_control_tei)).
+
+find_unused_local_teid(State, TeidEnd, TeidEnd) ->
+    case find_gtp_session_by_local_teid(TeidEnd, State) of
+        undefined -> TeidEnd;
+        _ -> undefined
+    end;
+find_unused_local_teid(State, TeidIt, TeidEnd) ->
+    case find_gtp_session_by_local_teid(TeidIt, State) of
+    undefined -> TeidIt;
+    _ -> find_unused_local_teid(State, inc_tei(TeidIt), TeidEnd)
+    end.
+find_unused_local_teid(State) ->
+    find_unused_local_teid(State, State#gtp_state.next_local_data_tei,
+                           dec_tei(State#gtp_state.next_local_data_tei)).
 
 %% connect/2
 connect(Name, {Socket, RemoteAddr, RemotePort}) ->
