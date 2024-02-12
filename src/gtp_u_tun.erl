@@ -64,7 +64,5 @@ create_pdp_context(PeerAddr, EUA, LocalTEID, RemoteTEID) ->
         %RemoteTEID = 56768, % TODO: this should be set to TEID obtained from CreateSessionResponse
         PeerIP = conv:bin_to_ip(PeerAddr), % TODO: IPv6
         UEIP = conv:bin_to_ip(EUA#epdg_eua.ipv4), % TODO: IPv6.
-        ok.
-        % TODO: This will be enabled once we depend on the gtp_u_kmod module:
-        %ServRef = get_env_gtp_u_kmod_server_ref(),
-        %gen_server:call(ServRef, {PeerIP, UEIP, LocalTEID, RemoteTEID}).
+        ServRef = get_env_gtp_u_kmod_server_ref(),
+        gen_server:call(ServRef, {PeerIP, UEIP, LocalTEID, RemoteTEID}).

@@ -251,7 +251,8 @@ state_authenticated({call, From}, {received_gtpc_create_session_response, Result
                   remote_teid := RemoteTEID,
                   remote_ipv4 := RemoteIPv4 % TODO: remote_ipv6
                  } = ResInfo,
-                gtp_u_tun:create_pdp_context(RemoteIPv4, EUA, LocalTEID, RemoteTEID);
+                Ret = gtp_u_tun:create_pdp_context(RemoteIPv4, EUA, LocalTEID, RemoteTEID),
+                lager:debug("gtp_u_tun:create_pdp_context(~p) returned ~p~n", [ResInfo, Ret]);
         _ -> ok
         end,
         gsup_server:tunnel_response(Data#ue_fsm_data.imsi, Result),
