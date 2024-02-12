@@ -239,7 +239,7 @@ state_authenticated(enter, _OldState, Data) ->
 
 state_authenticated({call, From}, tunnel_request, Data) ->
         lager:info("ue_fsm state_authenticated event=tunnel_request, ~p~n", [Data]),
-        epdg_gtpc_s2b:create_session_req(Data#ue_fsm_data.imsi),
+        epdg_gtpc_s2b:create_session_req(Data#ue_fsm_data.imsi, Data#ue_fsm_data.apn),
         {keep_state, Data, [{reply,From,ok}]};
 
 state_authenticated({call, From}, {received_gtpc_create_session_response, Result}, Data) ->

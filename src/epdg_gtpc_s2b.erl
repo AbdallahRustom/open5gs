@@ -48,7 +48,7 @@
 %% gen_server Function Exports
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3]).
--export([create_session_req/1, delete_session_req/1]).
+-export([create_session_req/2, delete_session_req/1]).
 
 %% Application Definitions
 -define(SERVER, ?MODULE).
@@ -57,8 +57,6 @@
 -define(CALLBACK_MOD, epdg_gtpc_s2b_cb).
 -define(ENV_APP_NAME, osmo_epdg).
 
-%% TODO: make APN configurable? get it from HSS?
--define(APN, <<"internet">>).
 -define(MCC, 901).
 -define(MNC, 42).
 -define(MNC_SIZE, 3).
@@ -137,14 +135,16 @@ init(State) ->
             lager:error("GTPv2C UDP socket open error: ~w~n", [Reason])
     end.
 
-create_session_req(Imsi) ->
-    gen_server:call(?SERVER, {gtpc_create_session_req, {Imsi}}).
+create_session_req(Imsi, Apn) ->
+    gen_server:call(?SERVER, {gtpc_create_session_req, {Imsi, Apn}}).
 
 delete_session_req(Imsi) ->
     gen_server:call(?SERVER, {gtpc_delete_session_req, {Imsi}}).
 
-handle_call({gtpc_create_session_req, {Imsi}}, {Pid, _Tag} = _From, State0) ->
-    {Sess0, State1} = find_or_new_gtp_session(Imsi, Pid, State0),
+handle_call({gtpc_create_session_req, {Imsi, Apn}}, {Pid, _Tag} = _From, State0) ->
+    {Sess0, State1} = find_or_new_gtp_session(Imsi,
+                        #gtp_session{pid = Pid, apn = list_to_binary(Apn)},
+                        State0),
     Req = gen_create_session_request(Sess0, State1),
     %TODO: increment State.seq_no.
     tx_gtp(Req, State1),
@@ -199,15 +199,13 @@ terminate(_Reason, _State) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-new_gtp_session(Imsi, Pid, State) ->
+new_gtp_session(Imsi, SessTpl, State) ->
     % TODO: find non-used local TEI inside State
     DefaultBearer = #gtp_bearer{
         ebi = 5,
         local_data_tei = State#gtp_state.next_local_data_tei
     },
-    Sess = #gtp_session{imsi = Imsi,
-        pid = Pid,
-        apn = ?APN,
+    Sess = SessTpl#gtp_session{imsi = Imsi,
         local_control_tei = State#gtp_state.next_local_control_tei,
         default_bearer_id = DefaultBearer#gtp_bearer.ebi,
         bearers = sets:add_element(DefaultBearer, sets:new())
@@ -227,13 +225,13 @@ find_gtp_session_by_imsi(Imsi, State) ->
                     State#gtp_state.sessions),
     Res.
 
-find_or_new_gtp_session(Imsi, Pid, State) ->
+find_or_new_gtp_session(Imsi, SessTpl, State) ->
     Sess = find_gtp_session_by_imsi(Imsi, State),
     case Sess of
         #gtp_session{imsi = Imsi} ->
             {Sess, State};
         undefined ->
-            new_gtp_session(Imsi, Pid, State)
+            new_gtp_session(Imsi, SessTpl, State)
     end.
 
 update_gtp_session(OldSess, NewSess, State) ->
