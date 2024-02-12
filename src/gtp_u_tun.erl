@@ -65,4 +65,4 @@ create_pdp_context(PeerAddr, EUA, LocalTEID, RemoteTEID) ->
         PeerIP = conv:bin_to_ip(PeerAddr), % TODO: IPv6
         UEIP = conv:bin_to_ip(EUA#epdg_eua.ipv4), % TODO: IPv6.
         ServRef = get_env_gtp_u_kmod_server_ref(),
-        gen_server:call(ServRef, {PeerIP, UEIP, LocalTEID, RemoteTEID}).
+        gen_server:call(ServRef, {create_pdp_context, PeerIP, LocalTEID, RemoteTEID, UEIP}).
