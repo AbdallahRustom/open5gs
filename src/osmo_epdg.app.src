@@ -11,7 +11,8 @@
 			gtplib,
 			diameter,
 			osmo_gsup,
-			osmo_ss7
+			osmo_ss7,
+			gtp_u_kmod
 			]},
 	{mod, {osmo_epdg_app, []}},
 	{env, []}

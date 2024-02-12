@@ -11,6 +11,13 @@ override_dh_auto_build:
 	if [ -e build_dep.tar.gz ] ; then tar xzf ./build_dep.tar.gz ; fi
 	dh_auto_build
 	rebar3 eunit
+	# Libraries are built under _checkouts/priv/lib/, but dh_install (debian/osmo-epdg.install)
+	# will expect them under /_build/default/lib/gen_socket/priv/lib/.
+	# Copy the path under debian/tmp/ to let dh_install find it.
+	if [ -e build_dep.tar.gz ]; then \
+		mkdir -p ./_build/default/lib/gen_socket/priv/lib/; \
+		cp _checkouts/gen_socket/priv/lib/gen_socket*.so ./_build/default/lib/gen_socket/priv/lib/; \
+	fi
 
 override_dh_clean:
 	dh_clean
