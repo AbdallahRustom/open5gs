@@ -355,7 +355,7 @@ rx_gtp(Req = #gtp{version = v2, type = create_bearer_request, ie = IEs}, State) 
                 instance = Ebi,
                 interface_type = _Interface,
                 key = RemoteDataTei, ipv4 = _IP4, ipv6 = _IP6}} = BearerIE,
-        Sess1 = gtp_session_add_bearer(Sess, #gtp_bearer{ebi = Ebi, remote_data_tei = RemoteDataTei}), % TODO: teid
+        Sess1 = gtp_session_add_bearer(Sess, #gtp_bearer{ebi = Ebi, remote_data_tei = RemoteDataTei}),
         State1 = update_gtp_session(Sess, Sess1, State),
         Resp = gen_create_bearer_response(Req, Sess1, request_accepted, State1),
         tx_gtp(Resp, State1),
