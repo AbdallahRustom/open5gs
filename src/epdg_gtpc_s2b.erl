@@ -146,19 +146,19 @@ handle_call({gtpc_create_session_req, {Imsi, Apn}}, {Pid, _Tag} = _From, State0)
                         #gtp_session{pid = Pid, apn = list_to_binary(Apn)},
                         State0),
     Req = gen_create_session_request(Sess0, State1),
-    %TODO: increment State.seq_no.
     tx_gtp(Req, State1),
+    State2 = inc_seq_no(State1),
     lager:debug("Waiting for CreateSessionResponse~n", []),
-    {reply, ok, State1};
+    {reply, ok, State2};
 
 handle_call({gtpc_delete_session_req, {Imsi}}, _From, State) ->
     Sess = find_gtp_session_by_imsi(Imsi, State),
     case Sess of
         #gtp_session{imsi = Imsi} ->
             Req = gen_delete_session_request(Sess, State),
-            %TODO: increment State.seq_no.
             tx_gtp(Req, State),
-            {reply, ok, State};
+            State1 = inc_seq_no(State),
+            {reply, ok, State1};
         undefined ->
             {reply, {error, imsi_unknown}, State}
     end.
@@ -198,6 +198,10 @@ terminate(_Reason, _State) ->
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
+
+inc_seq_no(State) ->
+    NewSeqNr = State#gtp_state.seq_no +1,
+    State#gtp_state{seq_no = NewSeqNr}.
 
 new_gtp_session(Imsi, SessTpl, State) ->
     % TODO: find non-used local TEI inside State
