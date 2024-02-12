@@ -44,7 +44,8 @@
 -export([received_swm_auth_response/2, received_swm_auth_compl_response/2, received_swm_session_termination_answer/2]).
 -export([received_gtpc_create_session_response/2, received_gtpc_delete_session_response/2, received_gtpc_delete_bearer_request/1]).
 -export([state_new/3, state_wait_auth_resp/3, state_authenticating/3, state_authenticated/3,
-         state_wait_delete_session_resp/3, state_wait_swm_session_termination_answer/3]).
+         state_wait_create_session_resp/3, state_wait_delete_session_resp/3,
+         state_wait_swm_session_termination_answer/3]).
 
 -record(ue_fsm_data, {
         imsi,
@@ -244,23 +245,7 @@ state_authenticated({call, _From}, {auth_request, PdpTypeNr, Apn}, Data) ->
 state_authenticated({call, From}, tunnel_request, Data) ->
         lager:info("ue_fsm state_authenticated event=tunnel_request, ~p~n", [Data]),
         epdg_gtpc_s2b:create_session_req(Data#ue_fsm_data.imsi, Data#ue_fsm_data.apn),
-        {keep_state, Data, [{reply,From,ok}]};
-
-state_authenticated({call, From}, {received_gtpc_create_session_response, Result}, Data) ->
-        lager:info("ue_fsm state_authenticated event=received_gtpc_create_session_response, ~p~n", [Data]),
-        case Result of
-        {ok, ResInfo} ->
-                #{eua := EUA,
-                  local_teid := LocalTEID,
-                  remote_teid := RemoteTEID,
-                  remote_ipv4 := RemoteIPv4 % TODO: remote_ipv6
-                 } = ResInfo,
-                Ret = gtp_u_tun:create_pdp_context(RemoteIPv4, EUA, LocalTEID, RemoteTEID),
-                lager:debug("gtp_u_tun:create_pdp_context(~p) returned ~p~n", [ResInfo, Ret]);
-        _ -> ok
-        end,
-        gsup_server:tunnel_response(Data#ue_fsm_data.imsi, Result),
-        {keep_state, Data, [{reply,From,ok}]};
+        {next_state, state_wait_create_session_resp, Data, [{reply,From,ok}]};
 
 state_authenticated({call, From}, purge_ms_request, Data) ->
         lager:info("ue_fsm state_authenticated event=purge_ms_request, ~p~n", [Data]),
@@ -282,6 +267,34 @@ state_authenticated({call, From}, _Whatever, Data) ->
 state_authenticated(cast, _Whatever, Data) ->
         lager:error("ue_fsm state_authenticated: Unexpected cast event, ~p~n", [Data]),
         {keep_state, Data}.
+
+state_wait_create_session_resp(enter, _OldState, Data) ->
+        {keep_state, Data, [{state_timeout,5000,create_session_timeout}]};
+
+state_wait_create_session_resp({call, From}, {received_gtpc_create_session_response, Result}, Data) ->
+        lager:info("ue_fsm state_authenticated event=received_gtpc_create_session_response, ~p~n", [Data]),
+        case Result of
+        {ok, ResInfo} ->
+                #{eua := EUA,
+                  local_teid := LocalTEID,
+                  remote_teid := RemoteTEID,
+                  remote_ipv4 := RemoteIPv4 % TODO: remote_ipv6
+                  } = ResInfo,
+                Ret = gtp_u_tun:create_pdp_context(RemoteIPv4, EUA, LocalTEID, RemoteTEID),
+                lager:debug("gtp_u_tun:create_pdp_context(~p) returned ~p~n", [ResInfo, Ret]);
+        _ -> ok
+        end,
+        gsup_server:tunnel_response(Data#ue_fsm_data.imsi, Result),
+        {next_state, state_authenticated, Data, [{reply,From,ok}]};
+
+state_wait_create_session_resp({call, From}, Event, Data) ->
+        lager:error("ue_fsm state_wait_delete_session_resp: Unexpected call event ~p, ~p~n", [Event, Data]),
+        {keep_state, Data, [{reply,From,{error,unexpected_event}}]};
+
+state_wait_create_session_resp(state_timeout, create_session_timeout, Data) ->
+        lager:error("ue_fsm state_wait_create_session_resp: Timeout ~p, ~p~n", [create_session_timeout, Data]),
+        gsup_server:tunnel_response(Data#ue_fsm_data.imsi, {error, create_session_timeout}),
+        {next_state, state_authenticated, Data}.
 
 state_wait_delete_session_resp(enter, _OldState, Data) ->
         {keep_state, Data};
