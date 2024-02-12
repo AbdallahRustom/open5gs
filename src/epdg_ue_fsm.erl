@@ -45,7 +45,7 @@
 -export([received_gtpc_create_session_response/2, received_gtpc_delete_session_response/2, received_gtpc_delete_bearer_request/1]).
 -export([state_new/3, state_wait_auth_resp/3, state_authenticating/3, state_authenticated/3,
          state_wait_create_session_resp/3, state_wait_delete_session_resp/3,
-         state_wait_swm_session_termination_answer/3]).
+         state_wait_swm_session_termination_answer/3, state_active/3]).
 
 -record(ue_fsm_data, {
         imsi,
@@ -249,10 +249,8 @@ state_authenticated({call, From}, tunnel_request, Data) ->
 
 state_authenticated({call, From}, purge_ms_request, Data) ->
         lager:info("ue_fsm state_authenticated event=purge_ms_request, ~p~n", [Data]),
-        case epdg_gtpc_s2b:delete_session_req(Data#ue_fsm_data.imsi) of
-        ok -> {next_state, state_wait_delete_session_resp, Data, [{reply,From,ok}]};
-        {error, Err} -> {keep_state, Data, [{reply,From,{error, Err}}]}
-        end;
+        Data1 = Data#ue_fsm_data{tear_down_gsup_needed = true},
+        {next_state, state_wait_swm_session_termination_answer, Data1, [{reply,From,ok}]};
 
 state_authenticated({call, From}, received_gtpc_delete_bearer_request, Data) ->
         lager:info("ue_fsm state_authenticated event=received_gtpc_delete_bearer_request, ~p~n", [Data]),
@@ -285,7 +283,7 @@ state_wait_create_session_resp({call, From}, {received_gtpc_create_session_respo
         _ -> ok
         end,
         gsup_server:tunnel_response(Data#ue_fsm_data.imsi, Result),
-        {next_state, state_authenticated, Data, [{reply,From,ok}]};
+        {next_state, state_active, Data, [{reply,From,ok}]};
 
 state_wait_create_session_resp({call, From}, Event, Data) ->
         lager:error("ue_fsm state_wait_delete_session_resp: Unexpected call event ~p, ~p~n", [Event, Data]),
@@ -295,6 +293,34 @@ state_wait_create_session_resp(state_timeout, create_session_timeout, Data) ->
         lager:error("ue_fsm state_wait_create_session_resp: Timeout ~p, ~p~n", [create_session_timeout, Data]),
         gsup_server:tunnel_response(Data#ue_fsm_data.imsi, {error, create_session_timeout}),
         {next_state, state_authenticated, Data}.
+
+state_active(enter, _OldState, Data) ->
+        {keep_state, Data};
+
+state_active({call, _From}, {auth_request, PdpTypeNr, Apn}, Data) ->
+        lager:info("ue_fsm state_active event=auth_request {~p, ~p}, ~p~n", [PdpTypeNr, Apn, Data]),
+        {next_state, state_new, Data, [postpone]};
+
+state_active({call, From}, purge_ms_request, Data) ->
+        lager:info("ue_fsm state_active event=purge_ms_request, ~p~n", [Data]),
+        case epdg_gtpc_s2b:delete_session_req(Data#ue_fsm_data.imsi) of
+        ok -> {next_state, state_wait_delete_session_resp, Data, [{reply,From,ok}]};
+        {error, Err} -> {keep_state, Data, [{reply,From,{error, Err}}]}
+        end;
+
+state_active({call, From}, received_gtpc_delete_bearer_request, Data) ->
+        lager:info("ue_fsm state_active event=received_gtpc_delete_bearer_request, ~p~n", [Data]),
+        gsup_server:cancel_location_request(Data#ue_fsm_data.imsi),
+        Data1 = Data#ue_fsm_data{tear_down_gsup_needed = false},
+        {next_state, state_wait_swm_session_termination_answer, Data1, [{reply,From,ok}]};
+
+state_active({call, From}, _Whatever, Data) ->
+        lager:error("ue_fsm state_active: Unexpected call event, ~p~n", [Data]),
+        {keep_state, Data, [{reply,From,ok}]};
+
+state_active(cast, _Whatever, Data) ->
+        lager:error("ue_fsm state_active: Unexpected cast event, ~p~n", [Data]),
+        {keep_state, Data}.
 
 state_wait_delete_session_resp(enter, _OldState, Data) ->
         {keep_state, Data};
