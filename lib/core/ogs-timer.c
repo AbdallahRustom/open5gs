@@ -102,7 +102,7 @@ ogs_timer_t *ogs_timer_add(
 
 void ogs_timer_delete_debug(ogs_timer_t *timer, const char *file_line)
 {
-    oif (timer) {
+    if (timer) {
         ogs_timer_mgr_t *manager;
         manager = timer->manager;
         ogs_assert(manager);
