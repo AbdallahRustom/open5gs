@@ -881,3 +881,9 @@ max:
 #    handover:
 #        duration: 500
 time:
+#cdr:
+#      enabled: True
+#      file_capture_period_sec: 1800
+#      reporting_period_sec: 10
+#      log_dir: /var/log/open5gs
+#      sgw_name: SGW-01

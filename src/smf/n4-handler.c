@@ -19,6 +19,7 @@
 
 #include "context.h"
 #include "s5c-build.h"
+#include "event.h"
 #include "pfcp-path.h"
 #include "gtp-path.h"
 #include "n4-handler.h"
@@ -26,6 +27,16 @@
 #include "sbi-path.h"
 #include "ngap-path.h"
 #include "fd-path.h"
+#include <arpa/inet.h>
+#include "usage_logger.h"
+
+static void log_usage_reports(smf_sess_t *sess, ogs_pfcp_session_report_request_t *pfcp_req);
+static void log_deletion_usage_reports(smf_sess_t *sess, ogs_pfcp_session_deletion_response_t *pfcp_rsp);
+static void log_start_usage_reports(smf_sess_t *sess);
+static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* event, uint64_t octets_in, uint64_t octets_out);
+static void log_usage_logger_data(UsageLoggerData usageLoggerData);
+static bool ogs_ip_to_string(const ogs_ip_t* ip, char* buffer, size_t buffer_size);
+static bool hex_array_to_string(uint8_t* hex_array, size_t hex_array_len, char* hex_string, size_t hex_string_len);
 
 uint8_t gtp_cause_from_pfcp(uint8_t pfcp_cause, uint8_t gtp_version)
 {
@@ -164,6 +175,10 @@ uint8_t smf_5gc_n4_handle_session_establishment_response(
 
     ogs_pfcp_xact_commit(xact);
 
+    if (ogs_pfcp_self()->usageLoggerState.enabled) {
+        log_start_usage_reports(sess);
+    }
+
     if (rsp->up_f_seid.presence == 0) {
         ogs_error("No UP F-SEID");
         cause_value = OGS_PFCP_CAUSE_MANDATORY_IE_MISSING;
@@ -179,6 +194,10 @@ uint8_t smf_5gc_n4_handle_session_establishment_response(
     } else {
         ogs_error("No Cause");
         cause_value = OGS_PFCP_CAUSE_MANDATORY_IE_MISSING;
+    }
+
+    if (ogs_pfcp_self()->usageLoggerState.enabled) {
+        log_start_usage_reports(sess);
     }
 
     if (cause_value != OGS_PFCP_CAUSE_REQUEST_ACCEPTED)
@@ -687,6 +706,9 @@ int smf_5gc_n4_handle_session_deletion_response(
         ogs_error("No Cause");
         status = OGS_SBI_HTTP_STATUS_BAD_REQUEST;
     }
+     if (rsp->usage_report->presence) {
+        log_deletion_usage_reports(sess, rsp);
+    }
 
     if (status != OGS_SBI_HTTP_STATUS_OK) {
         char *strerror = ogs_msprintf(
@@ -740,6 +762,10 @@ uint8_t smf_epc_n4_handle_session_establishment_response(
     ogs_debug("Session Establishment Response [epc]");
 
     ogs_pfcp_xact_commit(xact);
+
+    if (ogs_pfcp_self()->usageLoggerState.enabled) {
+        log_start_usage_reports(sess);
+    }
 
     if (rsp->up_f_seid.presence == 0) {
         ogs_error("No UP F-SEID");
@@ -1379,4 +1405,174 @@ void smf_n4_handle_session_report_request(
                     0));
         }
     }
+    if (report_type.usage_report) {
+        log_usage_reports(sess, pfcp_req);
+    }
+}
+
+static void log_start_usage_reports(smf_sess_t *sess) {
+    UsageLoggerData usageLoggerData = build_usage_logger_data(sess, "session_start", 0, 0);
+    log_usage_logger_data(usageLoggerData);
+}
+
+static void log_usage_reports(smf_sess_t *sess, ogs_pfcp_session_report_request_t *pfcp_req) {
+    int i = 0;
+    smf_ue_t *smf_ue = NULL;
+
+    ogs_assert(sess);
+    smf_ue = sess->smf_ue;
+    ogs_assert(smf_ue);
+
+    for (i = 0; i < OGS_ARRAY_SIZE(pfcp_req->usage_report); i++) {
+        ogs_pfcp_tlv_usage_report_session_report_request_t *usage_report =
+            &pfcp_req->usage_report[i];
+
+        ogs_pfcp_volume_measurement_t volume;
+        UsageLoggerData usageLoggerData = {0};
+
+        if (0 == usage_report->presence) {
+            /* We have reached the end of the usage_report list */
+            break;
+        }
+
+        if (0 == usage_report->urr_id.presence) {
+            ogs_error("Usage report URR has no ID field!");
+            continue;
+        }
+
+        if (0 == usage_report->volume_measurement.presence) {
+            ogs_error("No volume measurements in usage report!");
+            continue;
+        }
+
+        ogs_pfcp_parse_volume_measurement(&volume, &usage_report->volume_measurement);
+        if (0 == volume.ulvol) {
+            ogs_error("URR did not contain uplink volume measurement!");
+            continue;
+        } 
+        if (0 == volume.dlvol) {
+            ogs_error("URR did not contain downlink volume measurement!");
+            continue;
+        }
+
+        usageLoggerData = build_usage_logger_data(sess, "session_update", volume.uplink_volume, volume.downlink_volume);
+        log_usage_logger_data(usageLoggerData);
+    }
+}
+
+static void log_deletion_usage_reports(smf_sess_t *sess, ogs_pfcp_session_deletion_response_t *pfcp_rsp) {
+    int i = 0;
+    smf_ue_t *smf_ue = NULL;
+
+    ogs_assert(sess);
+    smf_ue = sess->smf_ue;
+    ogs_assert(smf_ue);
+
+    for (i = 0; i < OGS_ARRAY_SIZE(pfcp_rsp->usage_report); i++) {
+        ogs_pfcp_tlv_usage_report_session_deletion_response_t *usage_report =
+            &pfcp_rsp->usage_report[i];
+
+        ogs_pfcp_volume_measurement_t volume;
+        UsageLoggerData usageLoggerData = {0};
+
+        if (0 == usage_report->presence) {
+            /* We have reached the end of the usage_report list */
+            break;
+        }
+
+        if (0 == usage_report->urr_id.presence) {
+            ogs_error("Usage report URR has no ID field!");
+            continue;
+        }
+
+        if (0 == usage_report->volume_measurement.presence) {
+            ogs_error("No volume measurements in usage report!");
+            continue;
+        }
+
+        ogs_pfcp_parse_volume_measurement(&volume, &usage_report->volume_measurement);
+        if (0 == volume.ulvol) {
+            ogs_error("URR did not contain uplink volume measurement!");
+            continue;
+        } 
+        if (0 == volume.dlvol) {
+            ogs_error("URR did not contain downlink volume measurement!");
+            continue;
+        }
+
+        usageLoggerData = build_usage_logger_data(sess, "session_end", volume.uplink_volume, volume.downlink_volume);
+        log_usage_logger_data(usageLoggerData);
+    }
+}
+
+static UsageLoggerData build_usage_logger_data(smf_sess_t *sess, char const* event, uint64_t octets_in, uint64_t octets_out) {
+    smf_ue_t *smf_ue = NULL;
+    UsageLoggerData usageLoggerData = {0};
+
+    ogs_assert(sess);
+    smf_ue = sess->smf_ue;
+    ogs_assert(smf_ue);
+
+    strncpy(usageLoggerData.event, event, EVENT_STR_MAX_LEN);
+    strncpy(usageLoggerData.imsi, smf_ue->imsi_bcd, IMSI_STR_MAX_LEN);
+    strncpy(usageLoggerData.apn, sess->session.name, APN_STR_MAX_LEN);
+    usageLoggerData.qci = sess->session.qos.arp.priority_level;
+    usageLoggerData.octets_in = octets_in;
+    usageLoggerData.octets_out = octets_out;
+
+    strcpy(usageLoggerData.charging_id, "<charging_id placeholder>");
+    strncpy(usageLoggerData.msisdn_bcd, smf_ue->msisdn_bcd, MSISDN_BCD_STR_MAX_LEN);
+    strncpy(usageLoggerData.imeisv_bcd, smf_ue->imeisv_bcd, IMEISV_BCD_STR_MAX_LEN);
+    if (!hex_array_to_string(sess->gtp.ue_timezone.data, sess->gtp.ue_timezone.len, usageLoggerData.timezone_raw, TIMEZONE_RAW_STR_MAX_LEN)) {
+        ogs_error("Failed to convert raw timezone bytes to timezone hex string!");
+    }
+
+    usageLoggerData.plmn = ogs_plmn_id_hexdump(&sess->e_tai.plmn_id);
+    usageLoggerData.tac = sess->e_tai.tac;
+    usageLoggerData.eci = sess->e_cgi.cell_id;
+
+    const ogs_ip_t* ip_ptr = (const ogs_ip_t*)sess->ipv4->addr;
+    if (!ogs_ip_to_string(ip_ptr, usageLoggerData.ue_ip, IP_STR_MAX_LEN)) {
+       ogs_error("Failed to convert raw UE IP bytes");
+    }
+    if (!ogs_ip_to_string(&sess->sgw_s5c_ip, usageLoggerData.sgw_ip, IP_STR_MAX_LEN)) {
+       ogs_error("Failed to convert ogs IP bytes to string!");
+    }
+    ogs_assert(OGS_ADDRSTRLEN < IP_STR_MAX_LEN);
+    OGS_ADDR(ogs_gtp_self()->gtpc_addr, usageLoggerData.pgw_ip);
+
+    return usageLoggerData;
+}
+
+static void log_usage_logger_data(UsageLoggerData usageLoggerData) {
+    time_t current_epoch_sec = time(NULL);
+    bool log_res = log_usage_data(&ogs_pfcp_self()->usageLoggerState, current_epoch_sec, usageLoggerData);
+
+    if (!log_res) {
+        ogs_info("Failed to log usage data to file %s", ogs_pfcp_self()->usageLoggerState.filename);
+    }
+}
+
+// Convert ogs_ip_t to a string
+static bool ogs_ip_to_string(const ogs_ip_t* ip, char* buffer, size_t buffer_size) {
+    if (ip == NULL || buffer == NULL || buffer_size == 0) {
+        return false; // Handle invalid input
+    }
+
+    if (inet_ntop(AF_INET, &(ip->addr), buffer, buffer_size) == NULL) {
+        return false; // Error in conversion
+    }
+    return true;
+}
+static bool hex_array_to_string(uint8_t* hex_array, size_t hex_array_len, char* hex_string, size_t hex_string_len) {
+    int i;
+    for (i = 0; i < hex_array_len; i++) {
+        if (hex_string_len < i) {
+            return false;
+        }
+
+        sprintf(hex_string + (i * 2), "%02X", hex_array[i]);
+    }
+
+    return true;
 }
