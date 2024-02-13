@@ -111,6 +111,13 @@ static void fill_multiple_services_credit_control_ccr(smf_sess_t *sess,
         /* CC-Time, RFC4006 8.21 */
         /* CC-Money, RFC4006 8.22. Not used in 3GPP. */
         /* CC-Total-Octets, RFC4006 8.23 */
+        ret = fd_msg_avp_new(ogs_diam_gy_cc_total_octets, 0, &avpch2);
+        ogs_assert(ret == 0);
+        val.u64 = 1000000;
+        ret = fd_msg_avp_setvalue (avpch2, &val);
+        ogs_assert(ret == 0);
+        ret = fd_msg_avp_add (avpch1, MSG_BRW_LAST_CHILD, avpch2);
+        ogs_assert(ret == 0);
         /* CC-Input-Octets, RFC4006 8.24 */
         /* CC-Output-Octets, RFC4006 8.25 */
         /* CC-Service-Specific-Units, RFC4006 8.26 */
@@ -118,6 +125,7 @@ static void fill_multiple_services_credit_control_ccr(smf_sess_t *sess,
         ret = fd_msg_avp_add (avp, MSG_BRW_LAST_CHILD, avpch1);
         ogs_assert(ret == 0);
     }
+    if (cc_request_type != OGS_DIAM_GY_CC_REQUEST_TYPE_INITIAL_REQUEST) {
 
     /* Used-Service-Unit, RFC4006 8.18 */
     ret = fd_msg_avp_new(ogs_diam_gy_used_service_unit, 0, &avpch1);
@@ -296,7 +304,7 @@ static void fill_multiple_services_credit_control_ccr(smf_sess_t *sess,
     ogs_assert(ret == 0);
     ret = fd_msg_avp_add (avp, MSG_BRW_LAST_CHILD, avpch1);
     ogs_assert(ret == 0);
-
+    }
     /* Multiple Services AVP add to req: */
     ret = fd_msg_avp_add(req, MSG_BRW_LAST_CHILD, avp);
     ogs_assert(ret == 0);
