@@ -23,6 +23,7 @@ init([]) ->
 	GtpcLocalPort = application:get_env(?ENV_APP_NAME, gtpc_local_port, ?ENV_DEFAULT_GTPC_LOCAL_PORT),
 	GtpcRemoteIp = application:get_env(?ENV_APP_NAME, gtpc_remote_ip, ?ENV_DEFAULT_GTPC_REMOTE_IP),
 	GtpcRemotePort = application:get_env(?ENV_APP_NAME, gtpc_remote_port, ?ENV_DEFAULT_GTPC_REMOTE_PORT),
+	GtpuLocalIp = get_config_gtpu_local_ip_addr(),
 	%% AAA Server processes:
 	AAADiaSWxServer = {aaa_diameter_swx, {aaa_diameter_swx,start_link,[]},
 			   permanent,
@@ -40,7 +41,7 @@ init([]) ->
 			   worker,
 			   [aaa_diameter_swm]},
 	%% ePDG processes:
-	GtpcServer = {epdg_gtpc_s2b, {epdg_gtpc_s2b,start_link, [GtpcLocalIp, GtpcLocalPort, GtpcRemoteIp, GtpcRemotePort, []]},
+	GtpcServer = {epdg_gtpc_s2b, {epdg_gtpc_s2b,start_link, [GtpcLocalIp, GtpcLocalPort, GtpcRemoteIp, GtpcRemotePort, GtpuLocalIp, []]},
 		      permanent,
 		      5000,
 		      worker,
@@ -56,3 +57,20 @@ init([]) ->
 		        worker,
 		        [epdg_diameter_swm]},
 	{ok, { {one_for_all, 5, 10}, [AAADiaSWxServer, AAADiaS6bServer, AAADiaSWmServer, GtpcServer, GsupServer, DiaSWmServer]} }.
+
+% Returns GTP-U local IP address to use, as a string.
+get_config_gtpu_local_ip_addr() ->
+	GtpuKmodSockets = application:get_env(gtp_u_kmod, sockets, []),
+	[GtpuKmodSocket | _] = GtpuKmodSockets,
+	{_GtpuKmodName, GtpuKmodSockOpts} = GtpuKmodSocket,
+	case proplists:get_value(ip, GtpuKmodSockOpts, undefined) of
+	undefined ->
+		GtpcLocalIp = application:get_env(?ENV_APP_NAME, gtpc_local_ip, ?ENV_DEFAULT_GTPC_LOCAL_IP),
+		lager:notice("Config for GTP-U Local IP Address not found, using GTP-C ~p as fallback~n", [GtpcLocalIp]),
+		GtpcLocalIp;
+	IP ->
+		% GtpuLocalIp is in format {A,B,C,D}, convert it to string:
+		GtpuLocalIp = inet:ntoa(IP),
+		lager:info("Config for GTP-U Local IP Address: ~p~n", [GtpuLocalIp]),
+		GtpuLocalIp
+	end.

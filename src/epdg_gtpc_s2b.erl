@@ -43,7 +43,7 @@
 -include_lib("gtplib/include/gtp_packet.hrl").
 
 %% API Function Exports
--export([start_link/5]).
+-export([start_link/6]).
 -export([terminate/2]).
 %% gen_server Function Exports
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
@@ -63,12 +63,14 @@
 
 -record(gtp_state, {
         socket,
-        laddr_str,
+        laddr_str       :: string(),
         laddr           :: inet:ip_address(),
         lport           :: non_neg_integer(),
-        raddr_str,
+        raddr_str       :: string(),
         raddr           :: inet:ip_address(),
         rport           :: non_neg_integer(),
+        laddr_gtpu_str  :: string(),
+        laddr_gtpu      :: inet:ip_address(),
         restart_counter :: 0..255,
         seq_no          :: 0..16#ffffff,
         next_local_control_tei :: 0..16#ffffffff,
@@ -93,8 +95,8 @@
     bearers = sets:new()    :: sets:set()
 }).
 
-start_link(LocalAddr, LocalPort, RemoteAddr, RemotePort, Options) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [LocalAddr, LocalPort, RemoteAddr, RemotePort, Options], []).
+start_link(LocalAddr, LocalPort, RemoteAddr, RemotePort, GtpuLocalIp, Options) ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, [LocalAddr, LocalPort, RemoteAddr, RemotePort, GtpuLocalIp, Options], []).
 
 peer_down(API, SvcName, {PeerRef, _} = Peer) ->
     % fixme: why do we still have ets here?
@@ -104,10 +106,11 @@ peer_down(API, SvcName, {PeerRef, _} = Peer) ->
 
 init(State) ->
     lager:info("epdg_gtpc_s2b: init(): ~p", [State]),
-    [LocalAddr | [LocalPort | [RemoteAddr | [RemotePort | _]]]] = State,
+    [LocalAddr | [LocalPort | [RemoteAddr | [RemotePort | [GtpuLocalAddr | _]]]]] = State,
     lager:info("epdg_gtpc_s2b: Binding to IP ~s port ~p~n", [LocalAddr, LocalPort]),
     {ok, LocalAddrInet} = inet_parse:address(LocalAddr),
     {ok, RemoteAddrInet} = inet_parse:address(RemoteAddr),
+    {ok, GtpuLocalAddrInet} = inet_parse:address(GtpuLocalAddr),
     Opts = [
         binary,
         {ip, LocalAddrInet},
@@ -127,6 +130,8 @@ init(State) ->
                     raddr_str = RemoteAddr,
                     raddr = RemoteAddrInet,
                     rport = RemotePort,
+                    laddr_gtpu_str = GtpuLocalAddr,
+                    laddr_gtpu = GtpuLocalAddrInet,
                     restart_counter = 0,
                     seq_no = rand:uniform(16#FFFFFF),
                     next_local_control_tei = rand:uniform(16#FFFFFFFE),
@@ -457,6 +462,7 @@ gen_create_session_request(#gtp_session{imsi = Imsi,
                                     apn = Apn,
                                     local_control_tei = LocalCtlTEI} = Sess,
                            #gtp_state{laddr = LocalAddr,
+                                      laddr_gtpu = LocalAddrGtpu,
                                       restart_counter = RCnt,
                                       seq_no = SeqNo}) ->
     Bearer = gtp_session_default_bearer(Sess),
@@ -472,7 +478,7 @@ gen_create_session_request(#gtp_session{imsi = Imsi,
                     instance = Bearer#gtp_bearer.ebi,
                     interface_type = 31, %% "S2b-U ePDG GTP-U"
                     key = Bearer#gtp_bearer.local_data_tei,
-                    ipv4 = conv:ip_to_bin(LocalAddr)
+                    ipv4 = conv:ip_to_bin(LocalAddrGtpu)
                   }
                 ],
     IEs = [#v2_recovery{restart_counter = RCnt},
@@ -512,7 +518,7 @@ gen_delete_session_request(#gtp_session{remote_control_tei = RemoteCtlTEI} = Ses
 gen_create_bearer_response(Req = #gtp{version = v2, type = create_bearer_request},
                            Sess = #gtp_session{remote_control_tei = RemoteCtlTEI},
                            GtpCause,
-                           #gtp_state{laddr = LocalAddr,
+                           #gtp_state{laddr_gtpu = LocalAddrGtpu,
                                       restart_counter = RCnt}) ->
     Bearer = gtp_session_default_bearer(Sess),
     BearersIE = [#v2_bearer_level_quality_of_service{
@@ -527,7 +533,7 @@ gen_create_bearer_response(Req = #gtp{version = v2, type = create_bearer_request
         instance = 0,
         interface_type = 31, %% "S2b-U ePDG GTP-U"
         key = Bearer#gtp_bearer.local_data_tei,
-        ipv4 = conv:ip_to_bin(LocalAddr)
+        ipv4 = conv:ip_to_bin(LocalAddrGtpu)
         }
     ],
     IEs = [#v2_cause{v2_cause = GtpCause},
