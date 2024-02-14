@@ -386,6 +386,7 @@ rx_gtp(Resp = #gtp{version = v2, type = create_session_response}, State0) ->
             lager:info("s2b: Updated Session after create_session_response: ~p~n", [Sess2]),
             State1 = update_gtp_session(Sess0, Sess2, State0),
             ResInfo = #{
+                apn => binary_to_list(Sess0#gtp_session.apn),
                 eua => conv:gtp2_paa_to_epdg_eua(Paa),
                 local_teid => Bearer#gtp_bearer.local_data_tei,
                 remote_teid => RemoteTEID,

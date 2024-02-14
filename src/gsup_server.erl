@@ -156,10 +156,10 @@ handle_cast({tunnel_response, {Imsi, Result}}, State) ->
 	lager:info("tunnel_response for ~p: ~p~n", [Imsi, Result]),
 	Socket = State#gsups_state.socket,
 	case Result of
-		{ok, #{eua := Eua}} ->
+		{ok, #{apn := Apn, eua := Eua}} ->
 			PdpInfo = #{pdp_context_id => 0,
 				pdp_address => conv:epdg_eua_to_gsup_pdp_address(Eua),
-				access_point_name => "foobar.apn",
+				access_point_name => Apn,
 				quality_of_service => <<0, 0, 0>>,
 				pdp_charging => 0},
 			Resp = #{message_type => epdg_tunnel_result,
