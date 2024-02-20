@@ -1,3 +1,4 @@
+/etc/osmocom/osmo-epdg.config /etc/osmocom/
 /contrib/systemd/osmo-epdg.service /lib/systemd/system/
 /_build/default/bin/osmo-epdg /usr/bin/
-/_build/default/lib/gen_socket/priv/lib/gen_socket*.so /usr/lib/${DEB_HOST_MULTIARCH}/
+/_build/default/lib/gen_socket/priv/lib/gen_socket*.so /usr/lib/

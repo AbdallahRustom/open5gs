@@ -1,13 +1,14 @@
 [Unit]
-Description=Osmocom DIAMETER to GSUP translator
-After=osmo-hlr.service
+Description=Osmocom ePDG (Evolved Packet Data Gateway)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 Restart=always
-Environment="HOME=/var/lib/osmo-epdg"
+WorkingDirectory=/var/lib/osmo-epdg
+Environment="ERL_FLAGS=-config /etc/osmocom/osmo-epdg.config"
+ExecStartPre=-/usr/bin/ip link del gtp0
 ExecStartPre=/usr/bin/mkdir -p /var/lib/osmo-epdg
 ExecStart=/usr/bin/osmo-epdg
 RestartSec=2

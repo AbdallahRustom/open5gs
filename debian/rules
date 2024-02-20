@@ -19,6 +19,13 @@ override_dh_auto_build:
 		cp _checkouts/gen_socket/priv/lib/gen_socket*.so ./_build/default/lib/gen_socket/priv/lib/; \
 	fi
 
+override_dh_install:
+	install -d debian/tmp/etc/osmocom/
+	install -m 755 config/sys.config debian/tmp/etc/osmocom/osmo-epdg.config
+	sed -i 's#_build/default/lib/gen_socket/priv/lib#/usr/lib/#g' \
+		debian/tmp/etc/osmocom/osmo-epdg.config
+	dh_install
+
 override_dh_clean:
 	dh_clean
 	rm -rf _build _checkouts
