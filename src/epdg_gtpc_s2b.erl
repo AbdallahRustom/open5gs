@@ -482,8 +482,10 @@ gen_create_session_request(#gtp_session{imsi = Imsi,
                     ipv4 = conv:ip_to_bin(LocalAddrGtpu)
                   }
                 ],
-    IEs = [#v2_recovery{restart_counter = RCnt},
-           #v2_international_mobile_subscriber_identity{imsi = Imsi},
+    IEs = [#v2_international_mobile_subscriber_identity{imsi = Imsi},
+           #v2_serving_network{
+            plmn_id = gtp_utils:plmn_to_bin(?MCC, ?MNC, ?MNC_SIZE)
+           },
            #v2_rat_type{rat_type = 3}, %% 3 = WLAN
            #v2_fully_qualified_tunnel_endpoint_identifier{
                 instance = 0,
@@ -495,9 +497,7 @@ gen_create_session_request(#gtp_session{imsi = Imsi,
             #v2_selection_mode{mode = 0},
             #v2_pdn_address_allocation{type = ipv4, address = <<0,0,0,0>>},
             #v2_bearer_context{group = BearersIE},
-            #v2_serving_network{
-                    plmn_id = gtp_utils:plmn_to_bin(?MCC, ?MNC, ?MNC_SIZE)
-            }
+            #v2_recovery{restart_counter = RCnt}
           ],
     #gtp{version = v2, type = create_session_request, tei = 0, seq_no = SeqNo, ie = IEs}.
 
