@@ -41,7 +41,7 @@
 -export([start_link/1, stop/1]).
 -export([init/1,callback_mode/0,terminate/3]).
 -export([get_server_name_by_imsi/1, get_pid_by_imsi/1]).
--export([auth_request/2, lu_request/1, tunnel_request/1, purge_ms_request/1]).
+-export([auth_request/2, lu_request/1, tunnel_request/2, purge_ms_request/1]).
 -export([received_swm_auth_response/2, received_swm_auth_compl_response/2, received_swm_session_termination_answer/2]).
 -export([received_gtpc_create_session_response/2, received_gtpc_delete_session_response/2, received_gtpc_delete_bearer_request/1]).
 -export([state_new/3, state_wait_auth_resp/3, state_authenticating/3, state_authenticated/3,
@@ -90,10 +90,10 @@ lu_request(Pid) ->
                 {error, Err}
         end.
 
-tunnel_request(Pid) ->
-        lager:info("ue_fsm tunnel_request~n", []),
+tunnel_request(Pid, PCO) ->
+        lager:info("ue_fsm tunnel_request(~p)~n", [PCO]),
         try
-        gen_statem:call(Pid, tunnel_request)
+        gen_statem:call(Pid, {tunnel_request, PCO})
         catch
         exit:Err ->
                 {error, Err}
@@ -248,9 +248,9 @@ state_authenticated({call, _From}, {auth_request, PdpTypeNr, Apn}, Data) ->
         lager:info("ue_fsm state_authenticated event=auth_request {~p, ~p}, ~p~n", [PdpTypeNr, Apn, Data]),
         {next_state, state_new, Data, [postpone]};
 
-state_authenticated({call, From}, tunnel_request, Data) ->
+state_authenticated({call, From}, {tunnel_request, PCO}, Data) ->
         lager:info("ue_fsm state_authenticated event=tunnel_request, ~p~n", [Data]),
-        epdg_gtpc_s2b:create_session_req(Data#ue_fsm_data.imsi, Data#ue_fsm_data.apn),
+        epdg_gtpc_s2b:create_session_req(Data#ue_fsm_data.imsi, Data#ue_fsm_data.apn, PCO),
         {next_state, state_wait_create_session_resp, Data, [{reply,From,ok}]};
 
 state_authenticated({call, From}, purge_ms_request, Data) ->

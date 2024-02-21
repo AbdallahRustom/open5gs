@@ -48,7 +48,7 @@
 %% gen_server Function Exports
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3]).
--export([create_session_req/2, delete_session_req/1]).
+-export([create_session_req/3, delete_session_req/1]).
 
 %% Application Definitions
 -define(SERVER, ?MODULE).
@@ -142,17 +142,17 @@ init(State) ->
             lager:error("GTPv2C UDP socket open error: ~w~n", [Reason])
     end.
 
-create_session_req(Imsi, Apn) ->
-    gen_server:call(?SERVER, {gtpc_create_session_req, {Imsi, Apn}}).
+create_session_req(Imsi, Apn, APCO) ->
+    gen_server:call(?SERVER, {gtpc_create_session_req, {Imsi, Apn, APCO}}).
 
 delete_session_req(Imsi) ->
     gen_server:call(?SERVER, {gtpc_delete_session_req, {Imsi}}).
 
-handle_call({gtpc_create_session_req, {Imsi, Apn}}, {Pid, _Tag} = _From, State0) ->
+handle_call({gtpc_create_session_req, {Imsi, Apn, APCO}}, {Pid, _Tag} = _From, State0) ->
     {Sess0, State1} = find_or_new_gtp_session(Imsi,
                         #gtp_session{pid = Pid, apn = list_to_binary(Apn)},
                         State0),
-    Req = gen_create_session_request(Sess0, State1),
+    Req = gen_create_session_request(Sess0, APCO, State1),
     tx_gtp(Req, State1),
     State2 = inc_seq_no(State1),
     lager:debug("Waiting for CreateSessionResponse~n", []),
@@ -385,7 +385,15 @@ rx_gtp(Resp = #gtp{version = v2, type = create_session_response}, State0) ->
             Sess2 = Sess1#gtp_session{remote_control_tei = RemoteTEIC},
             lager:info("s2b: Updated Session after create_session_response: ~p~n", [Sess2]),
             State1 = update_gtp_session(Sess0, Sess2, State0),
-            ResInfo = #{
+            case maps:find({v2_additional_protocol_configuration_options,0}, Resp#gtp.ie) of
+            {ok, APCO_dec} ->
+                lager:debug("s2b: APCO_dec: ~p~n", [APCO_dec]),
+                APCO = gtp_packet:encode_protocol_config_opts(APCO_dec#v2_additional_protocol_configuration_options.config);
+            error ->
+                lager:notice("s2b: APCO not found in CreateSessionResp!~n", []),
+                APCO = undefined
+            end,
+            ResInfo0 = #{
                 apn => binary_to_list(Sess0#gtp_session.apn),
                 eua => conv:gtp2_paa_to_epdg_eua(Paa),
                 local_teid => Bearer#gtp_bearer.local_data_tei,
@@ -393,6 +401,10 @@ rx_gtp(Resp = #gtp{version = v2, type = create_session_response}, State0) ->
                 remote_ipv4 => IPu4,
                 remote_ipv6 => IPu6
             },
+            case APCO of
+            undefined -> ResInfo = ResInfo0;
+            _ -> ResInfo = maps:put(apco, APCO, ResInfo0)
+            end,
             epdg_ue_fsm:received_gtpc_create_session_response(Sess0#gtp_session.pid, {ok, ResInfo}),
             {noreply, State1}
         end;
@@ -462,6 +474,7 @@ tx_gtp(Req, State) ->
 gen_create_session_request(#gtp_session{imsi = Imsi,
                                     apn = Apn,
                                     local_control_tei = LocalCtlTEI} = Sess,
+                           APCO,
                            #gtp_state{laddr = LocalAddr,
                                       laddr_gtpu = LocalAddrGtpu,
                                       restart_counter = RCnt,
@@ -482,6 +495,7 @@ gen_create_session_request(#gtp_session{imsi = Imsi,
                     ipv4 = conv:ip_to_bin(LocalAddrGtpu)
                   }
                 ],
+    APCO_decoded = gtp_packet:decode_protocol_config_opts(APCO),
     IEs = [#v2_international_mobile_subscriber_identity{imsi = Imsi},
            #v2_serving_network{
             plmn_id = gtp_utils:plmn_to_bin(?MCC, ?MNC, ?MNC_SIZE)
@@ -497,7 +511,8 @@ gen_create_session_request(#gtp_session{imsi = Imsi,
             #v2_selection_mode{mode = 0},
             #v2_pdn_address_allocation{type = ipv4, address = <<0,0,0,0>>},
             #v2_bearer_context{group = BearersIE},
-            #v2_recovery{restart_counter = RCnt}
+            #v2_recovery{restart_counter = RCnt},
+            #v2_additional_protocol_configuration_options{instance = 0, config = APCO_decoded}
           ],
     #gtp{version = v2, type = create_session_request, tei = 0, seq_no = SeqNo, ie = IEs}.
 

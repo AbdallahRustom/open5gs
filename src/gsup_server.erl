@@ -156,18 +156,21 @@ handle_cast({tunnel_response, {Imsi, Result}}, State) ->
 	lager:info("tunnel_response for ~p: ~p~n", [Imsi, Result]),
 	Socket = State#gsups_state.socket,
 	case Result of
-		{ok, #{apn := Apn, eua := Eua}} ->
+		{ok, #{apn := Apn, eua := Eua} = Map} ->
 			PdpInfo = #{pdp_context_id => 0,
-				pdp_address => conv:epdg_eua_to_gsup_pdp_address(Eua),
-				access_point_name => Apn,
-				quality_of_service => <<0, 0, 0>>,
-				pdp_charging => 0},
-			Resp = #{message_type => epdg_tunnel_result,
-				imsi => Imsi,
-				message_class => 5,
-				pdp_info_complete => true,
-				pdp_info_list => [PdpInfo]
-				};
+				    pdp_address => conv:epdg_eua_to_gsup_pdp_address(Eua),
+				    access_point_name => Apn,
+				    quality_of_service => <<0, 0, 0>>,
+				    pdp_charging => 0},
+			Resp0 = #{message_type => epdg_tunnel_result,
+				  imsi => Imsi,
+				  message_class => 5,
+				  pdp_info_complete => true,
+				  pdp_info_list => [PdpInfo]},
+			case maps:find(apco, Map) of
+			{ok, APCO} -> Resp = maps:put(pco, APCO, Resp0);
+			error -> Resp = Resp0
+			end;
 		{error, _} ->
 			Resp = #{message_type => epdg_tunnel_error,
 				imsi => Imsi,
@@ -286,12 +289,12 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := lo
 
 % epdg tunnel request / trigger the establishment to the PGW and prepares everything for the user traffic to flow
 % When sending a epdg_tunnel_response everything must be ready for the UE traffic
-handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := epdg_tunnel_request, imsi := Imsi}}, State) ->
+handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := epdg_tunnel_request, imsi := Imsi, pco := PCO}}, State) ->
 	lager:info("GSUP: Rx ~p~n", [GsupMsgRx]),
 	UE = find_gsups_ue_by_imsi(Imsi, State),
 	case UE of
 	#gsups_ue{imsi = Imsi} ->
-		case epdg_ue_fsm:tunnel_request(UE#gsups_ue.pid) of
+		case epdg_ue_fsm:tunnel_request(UE#gsups_ue.pid, PCO) of
 		ok -> ok;
 		{error, _} ->
 			Resp = #{message_type => epdg_tunnel_error,
