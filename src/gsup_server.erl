@@ -228,6 +228,7 @@ handle_info({ipa_tcp_accept, Socket}, S) ->
 
 % send auth info / requesting authentication tuples
 handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := send_auth_info_req, imsi := Imsi}}, State0) ->
+	lager:info("GSUP: Rx ~p~n", [GsupMsgRx]),
 	case maps:find(pdp_info_list, GsupMsgRx) of
 	{ok, [PdpInfo]} ->
 		#{pdp_context_id := _PDPCtxId,
@@ -258,7 +259,8 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := se
 
 % location update request / when a UE wants to connect to a specific APN. This will trigger a AAA->HLR Request Server Assignment Request
 % FIXME: add APN instead of hardcoded internet
-handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, _GsupMsgRx = #{message_type := location_upd_req, imsi := Imsi}}, State) ->
+handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := location_upd_req, imsi := Imsi}}, State) ->
+	lager:info("GSUP: Rx ~p~n", [GsupMsgRx]),
 	UE = find_gsups_ue_by_imsi(Imsi, State),
 	case UE of
 	#gsups_ue{imsi = Imsi} ->
