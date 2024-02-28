@@ -49,6 +49,8 @@
          state_wait_create_session_resp/3, state_wait_delete_session_resp/3,
          state_wait_swm_session_termination_answer/3, state_active/3]).
 
+-define(TIMEOUT_VAL_WAIT_GTP_ANSWER, 10000).
+
 -record(ue_fsm_data, {
         imsi,
         apn = "internet" :: string(),
@@ -274,7 +276,7 @@ state_authenticated(cast, _Whatever, Data) ->
         {keep_state, Data}.
 
 state_wait_create_session_resp(enter, _OldState, Data) ->
-        {keep_state, Data, [{state_timeout,5000,create_session_timeout}]};
+        {keep_state, Data, [{state_timeout,?TIMEOUT_VAL_WAIT_GTP_ANSWER,create_session_timeout}]};
 
 state_wait_create_session_resp({call, From}, {received_gtpc_create_session_response, Result}, Data) ->
         lager:info("ue_fsm state_authenticated event=received_gtpc_create_session_response, ~p~n", [Data]),
