@@ -267,12 +267,12 @@ state_authenticated({call, From}, received_gtpc_delete_bearer_request, Data) ->
         Data1 = Data#ue_fsm_data{tear_down_gsup_needed = false},
         {next_state, state_wait_swm_session_termination_answer, Data1, [{reply,From,ok}]};
 
-state_authenticated({call, From}, _Whatever, Data) ->
-        lager:error("ue_fsm state_authenticated: Unexpected call event, ~p~n", [Data]),
+state_authenticated({call, From}, Event, Data) ->
+        lager:error("ue_fsm state_authenticated: Unexpected call event ~p, ~p~n", [Event, Data]),
         {keep_state, Data, [{reply,From,ok}]};
 
-state_authenticated(cast, _Whatever, Data) ->
-        lager:error("ue_fsm state_authenticated: Unexpected cast event, ~p~n", [Data]),
+state_authenticated(cast, Event, Data) ->
+        lager:error("ue_fsm state_authenticated: Unexpected cast event ~p, ~p~n", [Event, Data]),
         {keep_state, Data}.
 
 state_wait_create_session_resp(enter, _OldState, Data) ->
@@ -334,12 +334,12 @@ state_active({call, From}, received_gtpc_delete_bearer_request, Data) ->
         Data1 = Data#ue_fsm_data{tun_pdp_ctx = undefined, tear_down_gsup_needed = false},
         {next_state, state_wait_swm_session_termination_answer, Data1, [{reply,From,ok}]};
 
-state_active({call, From}, _Whatever, Data) ->
-        lager:error("ue_fsm state_active: Unexpected call event, ~p~n", [Data]),
+state_active({call, From}, Event, Data) ->
+        lager:error("ue_fsm state_active: Unexpected call event ~p, ~p~n", [Event, Data]),
         {keep_state, Data, [{reply,From,ok}]};
 
-state_active(cast, _Whatever, Data) ->
-        lager:error("ue_fsm state_active: Unexpected cast event, ~p~n", [Data]),
+state_active(cast, Event, Data) ->
+        lager:error("ue_fsm state_active: Unexpected cast event ~p, ~p~n", [Event, Data]),
         {keep_state, Data}.
 
 state_wait_delete_session_resp(enter, _OldState, Data) ->
