@@ -9,7 +9,7 @@
 %% diameter callbacks
 -export([peer_up/3, peer_down/3, pick_peer/4, pick_peer/5, prepare_request/3, prepare_request/4,
          prepare_retransmit/3,  prepare_retransmit/4,
-         handle_answer/4, handle_answer/5, handle_error/4, handle_request/3]).
+         handle_answer/4, handle_answer/5, handle_error/4, handle_error/5, handle_request/3]).
 
 %% peer_up/3
 peer_up(_SvcName, Peer, State) ->
@@ -88,10 +88,14 @@ handle_answer(#diameter_packet{msg = Msg, errors = Errors}, _Request, _SvcName, 
 
 %% handle_error/4
 handle_error(Reason, Request, _SvcName, _Peer) when is_list(Request) ->
-    lager:error("error: ~p~n", [Reason]),
+    lager:error("SWx error: ~p~n", [Reason]),
     {error, Reason};
 handle_error(Reason, _Request, _SvcName, _Peer) ->
-    lager:error("error: ~p~n", [Reason]),
+    lager:error("SWx error: ~p~n", [Reason]),
+    {error, Reason}.
+%% handle_error/5
+handle_error(Reason, _Request, _SvcName, _Peer, ExtraPars) ->
+    lager:error("SWx error: ~p, ExtraPars: ~p~n", [Reason, ExtraPars]),
     {error, Reason}.
 
 %% handle_request/3
