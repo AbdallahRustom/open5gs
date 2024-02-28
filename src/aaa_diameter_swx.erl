@@ -71,6 +71,7 @@
 -define(ENV_DEFAULT_DIAMETER_CONNECT_TIMER_MS, 30000).
 -define(ENV_DEFAULT_DIAMETER_WATCHDOG_TIMER_MS, 30000).
 -define(ENV_DEFAULT_DIAMETER_WATCHDOG_CFG, [{okay, 3}, {suspect, 1}]).
+-define(ENV_DEFAULT_DIAMETER_TRANSMIT_TIMER_MS, 10000).
 
 -define(VENDOR_ID_3GPP, 10415).
 -define(VENDOR_ID_3GPP2, 5535).
@@ -96,7 +97,8 @@
            {module, ?CALLBACK_MOD},
            {answer_errors, callback}]}]).
 
--record(state, {
+-record(swx_state, {
+        tx_timeout :: non_neg_integer(),
         handlers,
         peers = #{}
 }).
@@ -121,17 +123,18 @@ peer_down(API, SvcName, {PeerRef, _} = Peer) ->
     gen_server:cast(?SERVER, {peer_down, SvcName, Peer}),
     ok.
 
-init(State) ->
+init([]) ->
     Proto = application:get_env(?ENV_APP_NAME, dia_swx_proto, ?ENV_DEFAULT_DIAMETER_PROTO),
     Ip = application:get_env(?ENV_APP_NAME, dia_swx_remote_ip, ?ENV_DEFAULT_DIAMETER_REMOTE_IP),
     Port = application:get_env(?ENV_APP_NAME, dia_swx_remote_port, ?ENV_DEFAULT_DIAMETER_REMOTE_PORT),
     ConnectTimer = application:get_env(?ENV_APP_NAME, dia_swx_connect_timer, ?ENV_DEFAULT_DIAMETER_CONNECT_TIMER_MS),
     WatchdogTimer = application:get_env(?ENV_APP_NAME, dia_swx_watchdog_timer, ?ENV_DEFAULT_DIAMETER_WATCHDOG_TIMER_MS),
     WatchdogConfig = application:get_env(?ENV_APP_NAME, dia_swx_watchdog_config, ?ENV_DEFAULT_DIAMETER_WATCHDOG_CFG),
+    TxTimer = application:get_env(?ENV_APP_NAME, dia_swx_transmit_timer, ?ENV_DEFAULT_DIAMETER_TRANSMIT_TIMER_MS),
     ok = diameter:start_service(?MODULE, ?SERVICE),
     % lager:info("DiaServices is ~p~n", [DiaServ]),
     {ok, _} = connect({address, Proto, Ip, Port}, {timer, ConnectTimer, WatchdogTimer, WatchdogConfig}),
-    {ok, State}.
+    {ok, #swx_state{tx_timeout = TxTimer}}.
 
 test() ->
     test("001011234567890").
@@ -223,7 +226,7 @@ handle_call({mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey, PdpT
                  'RAT-Type' = RAT
                 },
     lager:debug("Swx Tx MAR: ~p~n", [MAR]),
-    Ret = diameter:call(?SVC_NAME, ?APP_ALIAS, MAR, [{extra, [Pid]}, detach]),
+    Ret = diameter_call(MAR, Pid, State),
     case Ret of
         ok ->
             {reply, ok, State};
@@ -244,7 +247,7 @@ handle_call({sar, {IMSI, Type, APN}}, {Pid, _Tag} = _From, State) ->
                  'Server-Assignment-Type' = Type,
                  'Service-Selection' = [APN]
                 },
-    Ret = diameter:call(?SVC_NAME, ?APP_ALIAS, SAR, [{extra, [Pid]}, detach]),
+    Ret = diameter_call(SAR, Pid, State),
     case Ret of
         ok ->
             {reply, ok, State};
@@ -305,5 +308,10 @@ tmod(tcp) ->
     diameter_tcp;
 tmod(sctp) ->
     diameter_sctp.
+
+diameter_call(Msg, Pid, State) ->
+    diameter:call(?SVC_NAME, ?APP_ALIAS, Msg, [{extra, [Pid]},
+                                               {timeout, State#swx_state.tx_timeout},
+                                                detach]).
 
 
