@@ -179,10 +179,11 @@ handle_cast(Req, State) ->
 
 %% @callback gen_server
 handle_info({udp, _Socket, IP, InPortNo, RxMsg}, State) ->
-    lager:info("S2b: Rx from IP ~p port ~p: ~p~n", [IP, InPortNo, RxMsg]),
-    Req = gtp_packet:decode(RxMsg),
-    lager:info("S2b: Rx from IP ~p port ~p: ~p~n", [IP, InPortNo, Req]),
-    rx_gtp(Req, State);
+    lager:debug("S2b: Rx from IP ~p port ~p: ~p~n", [IP, InPortNo, RxMsg]),
+    spawn_wait_ret(fun() ->
+                        rx_udp(IP, InPortNo, RxMsg, State)
+                   end,
+                   {noreply, State});
 handle_info(Info, State) ->
     lager:info("S2b handle_info: ~p ~n", [Info]),
     {noreply, State}.
@@ -358,6 +359,27 @@ connect(Name, {Socket, RemoteAddr, RemotePort}) ->
 
 connect(Address) ->
     connect(?SVC_NAME, Address).
+
+%% Calls Fun on a spawned monitored process and returns Fun ret.
+%% If spawned process crashes, return DefaultRet.
+spawn_wait_ret(Fun, DefaultRet) ->
+    MyPID=self(),
+    {Pid, MRef} = spawn_monitor(fun() ->
+                                    Ret = Fun(),
+                                    MyPID ! {self(), Ret}
+                                end),
+    receive
+    {'DOWN', MRef, process, _, _Reason} ->
+        DefaultRet;
+    {Pid, Ret} ->
+        erlang:demonitor(MRef, [flush]),
+        Ret
+    end.
+
+rx_udp(IP, InPortNo, RxMsg, State) ->
+    Req = gtp_packet:decode(RxMsg),
+    lager:debug("S2b: Rx from IP ~p port ~p: ~p~n", [IP, InPortNo, Req]),
+    rx_gtp(Req, State).
 
 rx_gtp(Resp = #gtp{version = v2, type = create_session_response}, State0) ->
     Sess0 = find_gtp_session_by_local_teic(Resp#gtp.tei, State0),
