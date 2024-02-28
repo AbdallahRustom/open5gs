@@ -35,7 +35,9 @@
 -module(gtp_utils).
 -author('Alexander Couzens <lynxis@fe80.eu>').
 
--export([plmn_to_bin/3, enum_v2_cause/1]).
+-include_lib("gtp_utils.hrl").
+
+-export([plmn_to_bin/3, enum_v2_cause/1, v2_cause_successful/1]).
 
 
 % ergw/apps/ergw/test/*.erl
@@ -125,3 +127,12 @@ enum_v2_cause(multiple_accesses_to_a_pdn_connection_not_allowed) -> 126;
 enum_v2_cause(request_rejected_due_to_ue_capability) -> 127;
 enum_v2_cause(s1_u_path_failure) -> 128;
 enum_v2_cause('5gc_not_allowed') -> 129.
+
+
+-spec v2_cause_successful(integer()) -> boolean().
+
+v2_cause_successful(GtpCauseInt) ->
+    GtpCauseInt == ?GTP2_CAUSE_REQUEST_ACCEPTED orelse
+    GtpCauseInt == ?GTP2_CAUSE_REQUEST_ACCEPTED_PARTIALLY orelse
+    GtpCauseInt == ?GTP2_CAUSE_NEW_PDN_TYPE_DUE_TO_NETWORK_PREFERENCE orelse
+    GtpCauseInt == ?GTP2_CAUSE_NEW_PDN_TYPE_DUE_TO_SINGLE_ADDRESS_BEARER_ONLY.

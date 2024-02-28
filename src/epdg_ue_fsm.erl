@@ -36,6 +36,7 @@
 
 -include_lib("osmo_gsup/include/gsup_protocol.hrl").
 -include_lib("gtplib/include/gtp_packet.hrl").
+-include_lib("gtp_utils.hrl").
 -include("conv.hrl").
 
 -export([start_link/1, stop/1]).
@@ -288,11 +289,14 @@ state_wait_create_session_resp({call, From}, {received_gtpc_create_session_respo
                                               eua = EUA, peer_addr = RemoteIPv4},
                 Ret = gtp_u_tun:create_pdp_context(TunPdpCtx),
                 lager:debug("gtp_u_tun:create_pdp_context(~p) returned ~p~n", [ResInfo, Ret]),
-                Data1 = Data#ue_fsm_data{tun_pdp_ctx = TunPdpCtx};
-        _ -> Data1 = Data
-        end,
-        gsup_server:tunnel_response(Data1#ue_fsm_data.imsi, Result),
-        {next_state, state_active, Data1, [{reply,From,ok}]};
+                Data1 = Data#ue_fsm_data{tun_pdp_ctx = TunPdpCtx},
+                gsup_server:tunnel_response(Data1#ue_fsm_data.imsi, Result),
+                {next_state, state_active, Data1, [{reply,From,ok}]};
+        {error, GtpCause} ->
+                GsupCause = conv:cause_gtp2gsup(GtpCause),
+                gsup_server:tunnel_response(Data#ue_fsm_data.imsi, {error, GsupCause}),
+                {next_state, state_authenticated, Data, [{reply,From,ok}]}
+        end;
 
 state_wait_create_session_resp({call, From}, Event, Data) ->
         lager:error("ue_fsm state_wait_delete_session_resp: Unexpected call event ~p, ~p~n", [Event, Data]),
@@ -300,7 +304,7 @@ state_wait_create_session_resp({call, From}, Event, Data) ->
 
 state_wait_create_session_resp(state_timeout, create_session_timeout, Data) ->
         lager:error("ue_fsm state_wait_create_session_resp: Timeout ~p, ~p~n", [create_session_timeout, Data]),
-        gsup_server:tunnel_response(Data#ue_fsm_data.imsi, {error, create_session_timeout}),
+        gsup_server:tunnel_response(Data#ue_fsm_data.imsi, {error, ?GSUP_CAUSE_CONGESTION}),
         {next_state, state_authenticated, Data}.
 
 state_active(enter, _OldState, Data) ->

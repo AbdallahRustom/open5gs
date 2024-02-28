@@ -389,46 +389,13 @@ rx_gtp(Resp = #gtp{version = v2, type = create_session_response}, State0) ->
             {noreply, State0};
         Sess0 ->
             % Do GTP specific msg parsing here, pass only relevant fields:
-            #{{v2_fully_qualified_tunnel_endpoint_identifier,1} :=
-                #v2_fully_qualified_tunnel_endpoint_identifier{
-                    interface_type = 32, %% "S2b PGW GTP-C"
-                    key = RemoteTEIC, ipv4 = _IPc4, ipv6 = _IPc6},
-              {v2_pdn_address_allocation,0} := Paa,
-              {v2_bearer_context,0} := #v2_bearer_context{instance = 0, group = BearerIE}} = Resp#gtp.ie,
-            % Parse BearerContext:
-            #{{v2_eps_bearer_id,0} := #v2_eps_bearer_id{instance = 0, eps_bearer_id = Ebi},
-              {v2_fully_qualified_tunnel_endpoint_identifier,4} :=
-                #v2_fully_qualified_tunnel_endpoint_identifier{
-                    interface_type = 33, %% "S2b-U PGW GTP-U"
-                    key = RemoteTEID, ipv4 = IPu4, ipv6 = IPu6}
-             } = BearerIE,
-            Bearer = gtp_session_find_bearer_by_ebi(Sess0, Ebi),
-            Sess1 = gtp_session_update_bearer(Sess0, Bearer, Bearer#gtp_bearer{remote_data_tei = RemoteTEID}),
-            Sess2 = Sess1#gtp_session{remote_control_tei = RemoteTEIC},
-            lager:info("s2b: Updated Session after create_session_response: ~p~n", [Sess2]),
-            State1 = update_gtp_session(Sess0, Sess2, State0),
-            case maps:find({v2_additional_protocol_configuration_options,0}, Resp#gtp.ie) of
-            {ok, APCO_dec} ->
-                lager:debug("s2b: APCO_dec: ~p~n", [APCO_dec]),
-                APCO = gtp_packet:encode_protocol_config_opts(APCO_dec#v2_additional_protocol_configuration_options.config);
-            error ->
-                lager:notice("s2b: APCO not found in CreateSessionResp!~n", []),
-                APCO = undefined
-            end,
-            ResInfo0 = #{
-                apn => binary_to_list(Sess0#gtp_session.apn),
-                eua => conv:gtp2_paa_to_epdg_eua(Paa),
-                local_teid => Bearer#gtp_bearer.local_data_tei,
-                remote_teid => RemoteTEID,
-                remote_ipv4 => IPu4,
-                remote_ipv6 => IPu6
-            },
-            case APCO of
-            undefined -> ResInfo = ResInfo0;
-            _ -> ResInfo = maps:put(apco, APCO, ResInfo0)
-            end,
-            epdg_ue_fsm:received_gtpc_create_session_response(Sess0#gtp_session.pid, {ok, ResInfo}),
-            {noreply, State1}
+            % First lookup Cause:
+            #{{v2_cause,0} := #v2_cause{instance = 0, v2_cause = GtpCauseAtom}} = Resp#gtp.ie,
+            GtpCause = gtp_utils:enum_v2_cause(GtpCauseAtom),
+            case gtp_utils:v2_cause_successful(GtpCause) of
+            true -> rx_gtp_create_session_response_successful(Resp, Sess0, State0);
+            false -> rx_gtp_create_session_response_failure(GtpCause, Sess0, State0)
+            end
         end;
 
 rx_gtp(Resp = #gtp{version = v2, type = delete_session_response}, State0) ->
@@ -486,6 +453,54 @@ rx_gtp(Req = #gtp{version = v2, type = delete_bearer_request, ie = IEs}, State) 
 rx_gtp(Req, State) ->
     lager:error("S2b: UNIMPLEMENTED Rx: ~p~n", [Req]),
     {noreply, State}.
+
+
+rx_gtp_create_session_response_successful(Resp, Sess0, State0) ->
+    #{{v2_fully_qualified_tunnel_endpoint_identifier,1} :=
+        #v2_fully_qualified_tunnel_endpoint_identifier{
+            interface_type = 32, %% "S2b PGW GTP-C"
+            key = RemoteTEIC, ipv4 = _IPc4, ipv6 = _IPc6},
+      {v2_pdn_address_allocation,0} := Paa,
+      {v2_bearer_context,0} := #v2_bearer_context{instance = 0, group = BearerIE}} = Resp#gtp.ie,
+    % Parse BearerContext:
+    #{{v2_eps_bearer_id,0} := #v2_eps_bearer_id{instance = 0, eps_bearer_id = Ebi},
+      {v2_fully_qualified_tunnel_endpoint_identifier,4} :=
+        #v2_fully_qualified_tunnel_endpoint_identifier{
+            interface_type = 33, %% "S2b-U PGW GTP-U"
+            key = RemoteTEID, ipv4 = IPu4, ipv6 = IPu6}
+     } = BearerIE,
+    Bearer = gtp_session_find_bearer_by_ebi(Sess0, Ebi),
+    Sess1 = gtp_session_update_bearer(Sess0, Bearer, Bearer#gtp_bearer{remote_data_tei = RemoteTEID}),
+    Sess2 = Sess1#gtp_session{remote_control_tei = RemoteTEIC},
+    lager:info("s2b: Updated Session after create_session_response: ~p~n", [Sess2]),
+    State1 = update_gtp_session(Sess0, Sess2, State0),
+    case maps:find({v2_additional_protocol_configuration_options,0}, Resp#gtp.ie) of
+    {ok, APCO_dec} ->
+        lager:debug("s2b: APCO_dec: ~p~n", [APCO_dec]),
+        APCO = gtp_packet:encode_protocol_config_opts(APCO_dec#v2_additional_protocol_configuration_options.config);
+    error ->
+        lager:notice("s2b: APCO not found in CreateSessionResp!~n", []),
+        APCO = undefined
+    end,
+    ResInfo0 = #{
+        apn => binary_to_list(Sess0#gtp_session.apn),
+        eua => conv:gtp2_paa_to_epdg_eua(Paa),
+        local_teid => Bearer#gtp_bearer.local_data_tei,
+        remote_teid => RemoteTEID,
+        remote_ipv4 => IPu4,
+        remote_ipv6 => IPu6
+    },
+    case APCO of
+    undefined -> ResInfo = ResInfo0;
+    _ -> ResInfo = maps:put(apco, APCO, ResInfo0)
+    end,
+    epdg_ue_fsm:received_gtpc_create_session_response(Sess0#gtp_session.pid, {ok, ResInfo}),
+    {noreply, State1}.
+
+rx_gtp_create_session_response_failure(GtpCause, Sess, State0) ->
+    epdg_ue_fsm:received_gtpc_create_session_response(Sess#gtp_session.pid, {error, GtpCause}),
+    State1 = delete_gtp_session(Sess, State0),
+    {noreply, State1}.
 
 tx_gtp(Req, State) ->
     lager:info("s2b: Tx ~p~n", [Req]),

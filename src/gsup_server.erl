@@ -171,11 +171,11 @@ handle_cast({tunnel_response, {Imsi, Result}}, State) ->
 			{ok, APCO} -> Resp = maps:put(pco, APCO, Resp0);
 			error -> Resp = Resp0
 			end;
-		{error, _} ->
+		{error, GsupCause} ->
 			Resp = #{message_type => epdg_tunnel_error,
 				imsi => Imsi,
 				message_class => 5,
-				cause => ?GSUP_CAUSE_NET_FAIL
+				cause => GsupCause
 				}
 	end,
 	tx_gsup(Socket, Resp),
