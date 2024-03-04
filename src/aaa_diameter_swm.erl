@@ -67,7 +67,8 @@ handle_cast({epdg_auth_compl_req, Imsi, Apn}, State) ->
 	#swm_session{imsi = Imsi} ->
 		aaa_ue_fsm:ev_swm_auth_compl(Sess#swm_session.pid, Apn);
 	undefined ->
-		epdg_diameter_swm:auth_compl_response(Imsi, {error, imsi_unknown})
+		RC_USER_UNKNOWN=5030,
+		epdg_diameter_swm:auth_compl_response(Imsi, {error, RC_USER_UNKNOWN})
 	end,
 	{noreply, State};
 

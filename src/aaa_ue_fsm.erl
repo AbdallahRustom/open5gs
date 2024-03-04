@@ -102,10 +102,10 @@ ev_rx_swx_maa(Pid, MAA) ->
                 {error, Err}
         end.
 
-ev_rx_swx_saa(Pid, {SAType, ResultCode}) ->
+ev_rx_swx_saa(Pid, Result) ->
         lager:info("ue_fsm ev_rx_swx_saa~n", []),
         try
-                gen_statem:call(Pid, {rx_swx_saa, SAType, ResultCode})
+                gen_statem:call(Pid, {rx_swx_saa, Result})
         catch
         exit:Err ->
                 {error, Err}
@@ -181,11 +181,16 @@ state_wait_swx_maa({call, From}, {rx_swx_maa, MAA}, Data) ->
 state_wait_swx_saa(enter, _OldState, Data) ->
         {keep_state, Data};
 
-state_wait_swx_saa({call, From}, {rx_swx_saa, _SAType, ResultCode}, Data) ->
-        lager:info("ue_fsm state_wait_swx_saa event=rx_swx_saa, ~p~n", [Data]),
-        aaa_diameter_swm:auth_compl_response(Data#ue_fsm_data.imsi, {ok, ResultCode}),
-        % TODO: don't transit if SAS returned error code.
-        {next_state, state_authenticated, Data, [{reply,From,ok}]}.
+state_wait_swx_saa({call, From}, {rx_swx_saa, Result}, Data) ->
+        lager:info("ue_fsm state_wait_swx_saa event=rx_swx_saa ~p, ~p~n", [Result, Data]),
+        case Result of
+        {error, _SAType, ResultCode} ->
+                aaa_diameter_swm:auth_compl_response(Data#ue_fsm_data.imsi, {error, ResultCode}),
+                {next_state, state_new, Data, [{reply,From,ok}]};
+        {ok, _SAType, ResInfo} ->
+                aaa_diameter_swm:auth_compl_response(Data#ue_fsm_data.imsi, {ok, ResInfo}),
+                {next_state, state_authenticated, Data, [{reply,From,ok}]}
+        end.
 
 state_authenticated(enter, _OldState, Data) ->
         % Mark ePDG session as active:
@@ -256,7 +261,11 @@ state_authenticated({call, From}, Ev, Data) ->
 state_authenticated_wait_swx_saa(enter, _OldState, Data) ->
         {keep_state, Data};
 
-state_authenticated_wait_swx_saa({call, From}, {rx_swx_saa, SAType, ResultCode}, Data) ->
+state_authenticated_wait_swx_saa({call, From}, {rx_swx_saa, Result}, Data) ->
+        case Result of
+        {error, SAType, ResultCode} -> ResultCode;
+        {ok, SAType, _ResInfo} -> ResultCode = 2001
+        end,
         lager:info("ue_fsm state_authenticated_wait_swx_saa event=rx_swx_saa SAType=~p ResulCode=~p, ~p~n", [SAType, ResultCode, Data]),
         case SAType of
         ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_PGW_UPDATE' ->

@@ -77,7 +77,18 @@ handle_answer(#diameter_packet{msg = Msg, errors = Errors}, Request, _SvcName, P
     #'SAR'{'Server-Assignment-Type' = SAType} = Request,
     % Retrieve fields from answer:
     #'SAA'{'Result-Code' = [ResultCode]} = Msg,
-    aaa_ue_fsm:ev_rx_swx_saa(ReqPid, {SAType, ResultCode}),
+    case result_code_success(ResultCode) of
+    ok ->
+        #'SAA'{'Non-3GPP-User-Data' = N3UA} = Msg,
+        PGWAddresses = parse_pgw_addr_from_N3UA(N3UA),
+        case PGWAddresses of
+        undefined -> ResInfo = #{};
+        _ -> ResInfo = maps:put(pgw_address_list, PGWAddresses, #{})
+        end,
+        aaa_ue_fsm:ev_rx_swx_saa(ReqPid, {ok, SAType, ResInfo});
+    _ ->
+        aaa_ue_fsm:ev_rx_swx_saa(ReqPid, {error, SAType, ResultCode})
+    end,
     {ok, Msg}.
 handle_answer(#diameter_packet{msg = Msg, errors = []}, _Request, _SvcName, Peer) ->
     lager:info("SWx Rx ~p: ~p~n", [Peer, Msg]),
@@ -101,3 +112,33 @@ handle_error(Reason, _Request, _SvcName, _Peer, ExtraPars) ->
 %% handle_request/3
 handle_request(_Packet, _SvcName, _Peer) ->
     erlang:error({unexpected, ?MODULE, ?LINE}).
+
+%% ------------------------------------------------------------------
+%% Internal Function Definitions
+%% ------------------------------------------------------------------
+
+result_code_success(2001) -> ok;
+result_code_success(2002) -> ok;
+result_code_success(_) -> invalid_result_code.
+
+parse_pgw_addr_from_MIP6_Agent_Info([]) ->
+    undefined;
+parse_pgw_addr_from_MIP6_Agent_Info([AgentInfo]) ->
+    #'MIP6-Agent-Info'{'MIP-Home-Agent-Address' = AgentAddrOpt} = AgentInfo,
+    case AgentAddrOpt of
+    [] -> undefined;
+    Res -> Res
+    end.
+parse_pgw_addr_from_APN_Configuration([]) ->
+    undefined;
+parse_pgw_addr_from_APN_Configuration([Head | Tail] = _ApnConfigs) ->
+    #'APN-Configuration'{'MIP6-Agent-Info' = AgentInfoOpt} = Head,
+    case parse_pgw_addr_from_MIP6_Agent_Info(AgentInfoOpt) of
+    undefined -> parse_pgw_addr_from_APN_Configuration(Tail);
+    Res -> Res
+    end.
+parse_pgw_addr_from_N3UA([]) ->
+    undefined;
+parse_pgw_addr_from_N3UA([N3UA]) ->
+    #'Non-3GPP-User-Data'{'APN-Configuration' = ApnConfigs} = N3UA,
+    parse_pgw_addr_from_APN_Configuration(ApnConfigs).

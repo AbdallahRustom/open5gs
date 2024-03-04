@@ -48,7 +48,7 @@
 %% gen_server Function Exports
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3]).
--export([create_session_req/3, delete_session_req/1]).
+-export([create_session_req/4, delete_session_req/1]).
 
 %% Application Definitions
 -define(SERVER, ?MODULE).
@@ -88,6 +88,8 @@
     imsi                   :: binary(),
     pid                    :: pid(),
     apn                    :: binary(),
+    raddr_str              :: string(),
+    raddr                  :: inet:ip_address(),
     ue_ip                  :: inet:ip_address(),
     local_control_tei = 0  :: non_neg_integer(),
     remote_control_tei = 0 :: non_neg_integer(),
@@ -142,15 +144,21 @@ init(State) ->
             lager:error("GTPv2C UDP socket open error: ~w~n", [Reason])
     end.
 
-create_session_req(Imsi, Apn, APCO) ->
-    gen_server:call(?SERVER, {gtpc_create_session_req, {Imsi, Apn, APCO}}).
+create_session_req(Imsi, Apn, APCO, PGWAddrCandidateList) ->
+    gen_server:call(?SERVER, {gtpc_create_session_req, {Imsi, Apn, APCO, PGWAddrCandidateList}}).
 
 delete_session_req(Imsi) ->
     gen_server:call(?SERVER, {gtpc_delete_session_req, {Imsi}}).
 
-handle_call({gtpc_create_session_req, {Imsi, Apn, APCO}}, {Pid, _Tag} = _From, State0) ->
+handle_call({gtpc_create_session_req, {Imsi, Apn, APCO, PGWAddrCandidateList}}, {Pid, _Tag} = _From, State0) ->
+    RemoteAddrStr = pick_gtpc_remote_address(PGWAddrCandidateList, State0),
+    lager:debug("Selected PGW Remote Address ~p~n", [RemoteAddrStr]),
+    {ok, RemoteAddrInet} = inet_parse:address(RemoteAddrStr),
     {Sess0, State1} = find_or_new_gtp_session(Imsi,
-                        #gtp_session{pid = Pid, apn = list_to_binary(Apn)},
+                        #gtp_session{pid = Pid,
+                                     apn = list_to_binary(Apn),
+                                     raddr_str = RemoteAddrInet,
+                                     raddr = RemoteAddrInet},
                         State0),
     Req = gen_create_session_request(Sess0, APCO, State1),
     tx_gtp(Req, State1),
@@ -351,6 +359,16 @@ find_unused_local_teid(State, TeidIt, TeidEnd) ->
 find_unused_local_teid(State) ->
     find_unused_local_teid(State, State#gtp_state.next_local_data_tei,
                            dec_tei(State#gtp_state.next_local_data_tei)).
+
+pick_gtpc_remote_address(PGWAddrCandidateList, State) ->
+    case PGWAddrCandidateList of
+    [] ->
+        %% Pick default address from configuration:
+        State#gtp_state .raddr_str;
+    [Head|_Tail] ->
+        % TODO: pick a compatible address with .laddr from PGWAddrCandidateList is exists.
+        Head
+    end.
 
 %% connect/2
 connect(Name, {Socket, RemoteAddr, RemotePort}) ->

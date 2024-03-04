@@ -53,10 +53,11 @@
 
 -record(ue_fsm_data, {
         imsi,
-        apn = "internet" :: string(),
-        tun_pdp_ctx :: epdg_tun_pdp_ctx,
-        tear_down_gsup_needed = false :: boolean(), %% need to send GSUP PurgeMSResp after STR+STA?
-        tear_down_gsup_cause = 0 :: integer()
+        apn                     = "internet"    :: string(),
+        pgw_rem_addr_list       = []            :: list(),
+        tun_pdp_ctx                             :: epdg_tun_pdp_ctx,
+        tear_down_gsup_needed   = false         :: boolean(), %% need to send GSUP PurgeMSResp after STR+STA?
+        tear_down_gsup_cause    = 0             :: integer()
         }).
 
 get_server_name_by_imsi(Imsi) ->
@@ -236,13 +237,22 @@ state_authenticating({call, From}, {received_swm_auth_compl_response, Result}, D
         lager:info("ue_fsm state_authenticating event=lu_request, ~p, ~p~n", [Result, Data]),
         % Rx "GSUP CEAI LU Req" is our way of saying Rx "Swm Diameter-EAP REQ (DER) with EAP AVP containing successuful auth":
         case Result of
-                {ok, _} ->
-                        Ret = ok;
-                {error, Err} ->
-                        Ret = {error, Err}
-        end,
-        gsup_server:lu_response(Data#ue_fsm_data.imsi, Ret),
-        {next_state, state_authenticated, Data, [{reply,From,Ret}]}.
+        {ok, ResInfo} ->
+                % Store PGW Remote address if AAA/HSS signalled them to us:
+                case maps:find(pdp_info_list, ResInfo) of
+                error ->
+                        Data1 = Data;
+                PGWAddrCandidateList ->
+                        Data1 = Data#ue_fsm_data{pgw_rem_addr_list = PGWAddrCandidateList}
+                end,
+                Ret = ok,
+                gsup_server:lu_response(Data1#ue_fsm_data.imsi, Ret),
+                {next_state, state_authenticated, Data1, [{reply,From,Ret}]};
+        {error, Err} ->
+                Ret = {error, Err},
+                gsup_server:lu_response(Data#ue_fsm_data.imsi, Ret),
+                {next_state, state_new, Data, [{reply,From,Ret}]}
+        end.
 
 state_authenticated(enter, _OldState, Data) ->
         {keep_state, Data};
@@ -253,7 +263,10 @@ state_authenticated({call, _From}, {auth_request, PdpTypeNr, Apn}, Data) ->
 
 state_authenticated({call, From}, {tunnel_request, PCO}, Data) ->
         lager:info("ue_fsm state_authenticated event=tunnel_request, ~p~n", [Data]),
-        epdg_gtpc_s2b:create_session_req(Data#ue_fsm_data.imsi, Data#ue_fsm_data.apn, PCO),
+        epdg_gtpc_s2b:create_session_req(Data#ue_fsm_data.imsi,
+                                         Data#ue_fsm_data.apn,
+                                         PCO,
+                                         Data#ue_fsm_data.pgw_rem_addr_list),
         {next_state, state_wait_create_session_resp, Data, [{reply,From,ok}]};
 
 state_authenticated({call, From}, purge_ms_request, Data) ->
