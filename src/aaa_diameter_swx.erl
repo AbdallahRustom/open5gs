@@ -51,7 +51,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3]).
 -export([multimedia_auth_request/7]).
--export([server_assignment_request/3]).
+-export([server_assignment_request/4]).
 -export([test/0, test/1]).
 
 %% Diameter Application Definitions
@@ -146,9 +146,9 @@ multimedia_auth_request(IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey,
     gen_server:call(?SERVER,
                           {mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey, PdpTypeNr}}).
 % APN is optional and should be []
-server_assignment_request(IMSI, Type, APN) ->
+server_assignment_request(IMSI, Type, APN, AgentInfoOpt) ->
     gen_server:call(?SERVER,
-                          {sar, {IMSI, Type, APN}}).
+                          {sar, {IMSI, Type, APN, AgentInfoOpt}}).
 
 result_code_success(2001) -> ok;
 result_code_success(2002) -> ok;
@@ -235,8 +235,8 @@ handle_call({mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey, PdpT
             {reply, {error, Err}, State}
     end;
 
-handle_call({sar, {IMSI, Type, APN}}, {Pid, _Tag} = _From, State) ->
-    lager:debug("SWx Tx SAR Imsi=~p Type=~p APN=~p~n", [IMSI, Type, APN]),
+handle_call({sar, {IMSI, Type, APN, AgentInfoOpt}}, {Pid, _Tag} = _From, State) ->
+    lager:debug("SWx Tx SAR Imsi=~p Type=~p APN=~p AgentInfoOpt=~p ~n", [IMSI, Type, APN, AgentInfoOpt]),
     SessionId = diameter:session_id(application:get_env(?ENV_APP_NAME, origin_host, ?ENV_DEFAULT_ORIG_HOST)),
     SAR = #'SAR'{'Vendor-Specific-Application-Id' = #'Vendor-Specific-Application-Id'{
                     'Vendor-Id'           = ?VENDOR_ID_3GPP,
@@ -245,7 +245,8 @@ handle_call({sar, {IMSI, Type, APN}}, {Pid, _Tag} = _From, State) ->
                  'User-Name' = IMSI,
                  'Auth-Session-State' = 1,
                  'Server-Assignment-Type' = Type,
-                 'Service-Selection' = [APN]
+                 'Service-Selection' = [APN],
+                 'MIP6-Agent-Info' = AgentInfoOpt
                 },
     Ret = diameter_call(SAR, Pid, State),
     case Ret of

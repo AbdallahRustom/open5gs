@@ -58,12 +58,13 @@ handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) wh
            'Auth-Application-Id' = AuthAppId,
            'Auth-Request-Type' = AuthReqType,
            'User-Name' = [UserName],
-           'Service-Selection' = [Apn]} = Req,
+           'Service-Selection' = [Apn],
+           'MIP6-Agent-Info' = AgentInfoOpt } = Req,
     Imsi = conv:nai_to_imsi(UserName),
     PidRes = aaa_ue_fsm:get_pid_by_imsi(Imsi),
     case PidRes of
     PidRes when is_pid(PidRes) ->
-        ok = aaa_ue_fsm:ev_rx_s6b_aar(PidRes, Apn),
+        ok = aaa_ue_fsm:ev_rx_s6b_aar(PidRes, {Apn, AgentInfoOpt}),
         lager:debug("Waiting for S6b AAA~n", []),
         receive
             {aaa, ResultCode} -> lager:debug("Rx AAA with ResultCode=~p~n", [ResultCode])

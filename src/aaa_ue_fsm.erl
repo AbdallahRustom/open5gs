@@ -111,10 +111,10 @@ ev_rx_swx_saa(Pid, Result) ->
                 {error, Err}
         end.
 
-ev_rx_s6b_aar(Pid, Apn) ->
-        lager:info("ue_fsm ev_rx_s6b_aar: ~p~n", [Apn]),
+ev_rx_s6b_aar(Pid, {Apn, AgentInfoOpt}) ->
+        lager:info("ue_fsm ev_rx_s6b_aar: ~p ~p~n", [Apn, AgentInfoOpt]),
         try
-                gen_statem:call(Pid, {rx_s6b_aar, Apn})
+                gen_statem:call(Pid, {rx_s6b_aar, Apn, AgentInfoOpt})
         catch
         exit:Err ->
                 {error, Err}
@@ -164,7 +164,7 @@ state_new({call, From}, {swm_auth_req, PdpTypeNr, Apn}, Data) ->
 
 state_new({call, From}, {swm_auth_compl, Apn}, Data) ->
         lager:info("ue_fsm state_new event=swm_auth_compl, ~p~n", [Data]),
-        case aaa_diameter_swx:server_assignment_request(Data#ue_fsm_data.imsi, 1, Apn) of
+        case aaa_diameter_swx:server_assignment_request(Data#ue_fsm_data.imsi, 1, Apn, []) of
         ok -> {next_state, state_wait_swx_saa, Data, [{reply,From,ok}]};
         {error, Err} -> {keep_state, Data, [{reply,From,{error, Err}}]}
         end.
@@ -197,11 +197,11 @@ state_authenticated(enter, _OldState, Data) ->
         Data1 = Data#ue_fsm_data{epdg_sess_active = true},
         {keep_state, Data1};
 
-state_authenticated({call, {Pid, _Tag} = From}, {rx_s6b_aar, Apn}, Data) ->
-        lager:info("ue_fsm state_authenticated event=rx_s6b_aar Apn=~p, ~p~n", [Apn, Data]),
+state_authenticated({call, {Pid, _Tag} = From}, {rx_s6b_aar, Apn, AgentInfoOpt}, Data) ->
+        lager:info("ue_fsm state_authenticated event=rx_s6b_aar Apn=~p AgentInfo=~p, ~p~n", [Apn, AgentInfoOpt, Data]),
         case aaa_diameter_swx:server_assignment_request(Data#ue_fsm_data.imsi,
                                                         ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_PGW_UPDATE',
-                                                        Apn) of
+                                                        Apn, AgentInfoOpt) of
         ok ->   Data1 = Data#ue_fsm_data{s6b_resp_pid = Pid, apn = Apn},
                 {next_state, state_authenticated_wait_swx_saa, Data1, [{reply,From,ok}]};
         {error, Err} -> {keep_state, Data, [{reply,From,{error, Err}}]}
@@ -220,7 +220,7 @@ state_authenticated({call, From}, rx_swm_str, Data) ->
         {true, false} -> %% All sessions will now be gone, trigger SAR Type=USER_DEREGISTRATION
                 case aaa_diameter_swx:server_assignment_request(Data#ue_fsm_data.imsi,
                                                                 ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_USER_DEREGISTRATION',
-                                                                Data#ue_fsm_data.apn) of
+                                                                Data#ue_fsm_data.apn, []) of
                 ok ->   {next_state, state_authenticated_wait_swx_saa, Data, [{reply,From,ok}]};
                 {error, _Err} ->
                         DiaRC = 5002, %% UNKNOWN_SESSION_ID
@@ -241,7 +241,7 @@ state_authenticated({call, {Pid, _Tag} = From}, rx_s6b_str, Data) ->
         {true, false} -> %% All sessions will now be gone, trigger SAR Type=USER_DEREGISTRATION
                 case aaa_diameter_swx:server_assignment_request(Data#ue_fsm_data.imsi,
                                                                 ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_USER_DEREGISTRATION',
-                                                                Data#ue_fsm_data.apn) of
+                                                                Data#ue_fsm_data.apn, []) of
                 ok ->   Data1 = Data#ue_fsm_data{s6b_resp_pid = Pid},
                         {next_state, state_authenticated_wait_swx_saa, Data1, [{reply,From,ok}]};
                 {error, _Err} ->
