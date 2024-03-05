@@ -208,10 +208,10 @@ state_new({call, From}, purge_ms_request, Data) ->
 state_wait_auth_resp(enter, _OldState, Data) ->
         {keep_state, Data};
 
-state_wait_auth_resp({call, From}, {received_swm_auth_response, Auth}, Data) ->
-        lager:info("ue_fsm state_wait_auth_resp event=received_swm_auth_response, ~p~n", [Data]),
-        gsup_server:auth_response(Data#ue_fsm_data.imsi, Auth),
-        case Auth of
+state_wait_auth_resp({call, From}, {received_swm_auth_response, Result}, Data) ->
+        lager:info("ue_fsm state_wait_auth_resp event=received_swm_auth_response Result=~p, ~p~n", [Result, Data]),
+        gsup_server:auth_response(Data#ue_fsm_data.imsi, Result),
+        case Result of
                 {ok, _} ->
                         {next_state, state_authenticating, Data, [{reply,From,ok}]};
                 {error, Err} ->

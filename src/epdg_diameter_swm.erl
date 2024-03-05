@@ -41,7 +41,7 @@ auth_request(Imsi, PdpTypeNr, Apn) ->
 	% Apn: SWm Diameter AVP "Service-Selection"
 	Result = gen_server:call(?SERVER, {epdg_auth_req, ImsiStr, PdpTypeNr, Apn}),
 	case Result of
-		{ok, _Mar} ->
+		{ok, _AuthTuples} ->
 			epdg_ue_fsm:received_swm_auth_response(self(), Result),
 			ok;
 		_ -> Result

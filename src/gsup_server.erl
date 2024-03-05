@@ -36,7 +36,6 @@
 
 -behaviour(gen_server).
 
--include_lib("diameter_3gpp_ts29_273_swx.hrl").
 -include_lib("osmo_ss7/include/ipa.hrl").
 -include_lib("osmo_gsup/include/gsup_protocol.hrl").
 -include("gtp_utils.hrl").
@@ -65,16 +64,9 @@
 -export([code_change/3, terminate/2]).
 -export([auth_response/2, lu_response/2, tunnel_response/2, purge_ms_response/2, cancel_location_request/1]).
 
-% TODO: -spec dia_sip2gsup('SIP-Auth-Data-Item'()) -> #'GSUPAuthTuple'{}.
-dia_sip2gsup(#'SIP-Auth-Data-Item'{'SIP-Authenticate' = [Authenticate], 'SIP-Authorization' = [Authorization],
-				   'Confidentiality-Key' = [CKey], 'Integrity-Key' = [IKey]}) ->
-	lager:info("dia_sip2gsup: auth ~p authz ~p ~n", [Authenticate, Authorization]),
-	lager:info("  rand ~p autn ~p ~n", [lists:sublist(Authenticate, 1, 16), lists:sublist(Authenticate, 17, 16)]),
-	#{rand => list_to_binary(lists:sublist(Authenticate, 1, 16)),
-	  autn=> list_to_binary(lists:sublist(Authenticate, 17, 16)),
-	  res=> list_to_binary(Authorization),
-	  ik=> list_to_binary(IKey),
-	  ck=> list_to_binary(CKey)}.
+% TODO: -spec dia_sip2gsup(#epdg_auth_tuple{}) -> map().
+epdg_auth_tuple2gsup(#epdg_auth_tuple{rand = Rand, autn = Autn, res = Res, ck = Ck, ik = Ik}) ->
+	#{rand => Rand, autn => Autn, res => Res, ik => Ik, ck => Ck}.
 
 %% ------------------------------------------------------------------
 %% our exported API
@@ -119,16 +111,15 @@ handle_call(Info, _From, State) ->
 	error_logger:error_report(["unknown handle_call", {module, ?MODULE}, {info, Info}, {state, State}]),
 	{reply, error, not_implemented}.
 
-handle_cast({auth_response, {Imsi, Auth}}, State) ->
-	lager:info("auth_response for ~p: ~p~n", [Imsi, Auth]),
+handle_cast({auth_response, {Imsi, Result}}, State) ->
+	lager:info("auth_response for ~p: ~p~n", [Imsi, Result]),
 	Socket = State#gsups_state.socket,
-	case Auth of
-		{ok, Mar} ->	SipAuthTuples = Mar#'MAA'.'SIP-Auth-Data-Item',
-				% AuthTuples = dia_sip2gsup(SipAuthTuples),
+	case Result of
+		{ok, AuthTuples} ->
 				Resp = #{message_type => send_auth_info_res,
 					message_class => 5,
-					imsi => list_to_binary(Mar#'MAA'.'User-Name'),
-					auth_tuples => lists:map(fun dia_sip2gsup/1, SipAuthTuples)
+					imsi => Imsi,
+					auth_tuples => lists:map(fun epdg_auth_tuple2gsup/1, AuthTuples)
 					};
 		{error, _} ->	Resp = #{message_type => send_auth_info_err, imsi => Imsi, message_class => 5, cause => ?GSUP_CAUSE_NET_FAIL}
 	end,
@@ -359,9 +350,9 @@ terminate(Reason, _S) ->
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
-auth_response(Imsi, Auth) ->
-	lager:info("auth_response(~p): ~p~n", [Imsi, Auth]),
-	gen_server:cast(?SERVER, {auth_response, {Imsi, Auth}}).
+auth_response(Imsi, Result) ->
+	lager:info("auth_response(~p): ~p~n", [Imsi, Result]),
+	gen_server:cast(?SERVER, {auth_response, {Imsi, Result}}).
 
 lu_response(Imsi, Result) ->
 	lager:info("lu_response(~p): ~p~n", [Imsi, Result]),

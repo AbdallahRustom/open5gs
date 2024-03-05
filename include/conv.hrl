@@ -43,3 +43,11 @@
         eua          :: epdg_eua,
         peer_addr    :: binary()
 }).
+
+-record(epdg_auth_tuple, {
+        rand :: binary(),
+        autn :: binary(),
+        res  :: binary(),
+        ik   :: binary(),
+        ck   :: binary()
+}).

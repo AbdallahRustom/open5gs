@@ -93,10 +93,10 @@ ev_rx_swm_str(Pid) ->
                 {error, Err}
         end.
 
-ev_rx_swx_maa(Pid, MAA) ->
+ev_rx_swx_maa(Pid, Result) ->
         lager:info("ue_fsm ev_rx_swx_maa~n", []),
         try
-                gen_statem:call(Pid, {rx_swx_maa, MAA})
+                gen_statem:call(Pid, {rx_swx_maa, Result})
         catch
         exit:Err ->
                 {error, Err}
@@ -172,9 +172,9 @@ state_new({call, From}, {swm_auth_compl, Apn}, Data) ->
 state_wait_swx_maa(enter, _OldState, Data) ->
         {keep_state, Data};
 
-state_wait_swx_maa({call, From}, {rx_swx_maa, MAA}, Data) ->
+state_wait_swx_maa({call, From}, {rx_swx_maa, Result}, Data) ->
         lager:info("ue_fsm state_wait_swx_maa event=rx_swx_maa, ~p~n", [Data]),
-        aaa_diameter_swm:auth_response(Data#ue_fsm_data.imsi, {ok, MAA}),
+        aaa_diameter_swm:auth_response(Data#ue_fsm_data.imsi, Result),
         % TODO: don't transit if SAS returned error code.
         {next_state, state_new, Data, [{reply,From,ok}]}.
 

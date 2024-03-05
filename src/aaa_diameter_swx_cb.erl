@@ -5,6 +5,7 @@
 
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter_3gpp_ts29_273_swx.hrl").
+-include("conv.hrl").
 
 %% diameter callbacks
 -export([peer_up/3, peer_down/3, pick_peer/4, pick_peer/5, prepare_request/3, prepare_request/4,
@@ -69,7 +70,10 @@ prepare_retransmit(Packet, SvcName, Peer, ExtraPars) ->
 %% handle_answer/4
 handle_answer(#diameter_packet{msg = Msg, errors = Errors}, _Request, _SvcName, Peer, ReqPid) when is_record(Msg, 'MAA')  ->
     lager:info("SWx Rx MAA ~p: ~p/ Errors ~p ~n", [Peer, Msg, Errors]),
-    aaa_ue_fsm:ev_rx_swx_maa(ReqPid, Msg),
+    #'MAA'{'SIP-Auth-Data-Item' = SipAuthTuples} = Msg,
+    AuthTuples = lists:map(fun dia_sip2epdg_auth_tuple/1, SipAuthTuples),
+    % TODO: handle error case....
+    aaa_ue_fsm:ev_rx_swx_maa(ReqPid, {ok, AuthTuples}),
     {ok, Msg};
 handle_answer(#diameter_packet{msg = Msg, errors = Errors}, Request, _SvcName, Peer, ReqPid) when is_record(Msg, 'SAA')  ->
     lager:info("SWx Rx SAA ~p: ~p/ Errors ~p ~n", [Peer, Msg, Errors]),
@@ -120,6 +124,20 @@ handle_request(_Packet, _SvcName, _Peer) ->
 result_code_success(2001) -> ok;
 result_code_success(2002) -> ok;
 result_code_success(_) -> invalid_result_code.
+
+dia_sip2epdg_auth_tuple(#'SIP-Auth-Data-Item'{'SIP-Authenticate' = [Authenticate],
+                                              'SIP-Authorization' = [Authorization],
+                                              'Confidentiality-Key' = [CKey],
+                                              'Integrity-Key' = [IKey]}) ->
+    lager:info("dia_sip2gsup: auth ~p authz ~p ~n", [Authenticate, Authorization]),
+    lager:info("  rand ~p autn ~p ~n", [lists:sublist(Authenticate, 1, 16), lists:sublist(Authenticate, 17, 16)]),
+    #epdg_auth_tuple{
+        rand = list_to_binary(lists:sublist(Authenticate, 1, 16)),
+        autn = list_to_binary(lists:sublist(Authenticate, 17, 16)),
+        res = list_to_binary(Authorization),
+        ik = list_to_binary(IKey),
+        ck =list_to_binary(CKey)
+    }.
 
 parse_pgw_addr_from_MIP6_Agent_Info([]) ->
     undefined;
