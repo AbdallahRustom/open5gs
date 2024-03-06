@@ -122,7 +122,7 @@ ev_rx_s6b_aar(Pid, {Apn, AgentInfoOpt}) ->
         end.
 
 ev_rx_s6b_str(Pid) ->
-        lager:info("ue_fsm ev_rx_s6b_str: ~p~n", []),
+        lager:info("ue_fsm ev_rx_s6b_str~n", []),
         try
                 gen_statem:call(Pid, rx_s6b_str)
         catch
