@@ -55,7 +55,8 @@
 
 -record(gsups_ue, {
 	imsi                   :: binary(),
-	pid                    :: pid()
+	pid                    :: pid(),
+	mref                   :: reference()
 	}).
 
 -export([start_link/3]).
@@ -246,8 +247,8 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := se
 			 cause => ?GSUP_CAUSE_NET_FAIL
 		},
 		tx_gsup(Socket, Resp),
-		epdg_ue_fsm:stop(UE#gsups_ue.pid),
-		State2 = delete_gsups_ue(UE, State1)
+		State2 = delete_gsups_ue(UE, State1),
+		epdg_ue_fsm:stop(UE#gsups_ue.pid)
 	end,
 	{noreply, State2};
 
@@ -340,6 +341,11 @@ handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx = #{message_type := lo
 	end,
 	{noreply, State1};
 
+handle_info({'DOWN', MRef, process, Pid, Reason}, State0) ->
+	lager:notice("GSUP: epdg_ue_fsm ~p exited, reason: ~p~n", [Pid, Reason]),
+	State1 = delete_gsups_ue_by_mref(MRef, State0),
+	{noreply, State1};
+
 handle_info(Info, S) ->
 	error_logger:error_report(["unknown handle_info", {module, ?MODULE}, {info, Info}, {state, S}]),
 	{noreply, S}.
@@ -381,8 +387,14 @@ tx_gsup(Socket, Msg) ->
 
 
 new_gsups_ue(Imsi, State) ->
-	{ok, Pid} = epdg_ue_fsm:start_link(Imsi),
-	UE = #gsups_ue{imsi = Imsi, pid = Pid},
+	case epdg_ue_fsm:start_monitor(Imsi) of
+	{ok, {Pid, MRef}} -> ok;
+	{error,{already_started,PrevPid}} ->
+		lager:notice("epdg_ue_fsm for Imsi ~p already existed, reusing!: ~p~n", [Imsi, PrevPid]),
+		Pid = PrevPid,
+		MRef = erlang:monitor(process, Pid)
+	end,
+	UE = #gsups_ue{imsi = Imsi, pid = Pid, mref = MRef},
 	NewSt = State#gsups_state{ues = sets:add_element(UE, State#gsups_state.ues)},
 	{UE, NewSt}.
 
@@ -396,6 +408,15 @@ find_gsups_ue_by_imsi(Imsi, State) ->
 			State#gsups_state.ues),
 	Res.
 
+find_gsups_ue_by_mref(MRef, State) ->
+	{MRef, Res} = sets:fold(
+			fun(SessIt = #gsups_ue{imsi = LookupMRef}, {LookupMRef, _AccIn}) -> {LookupMRef, SessIt};
+				(_, AccIn) -> AccIn
+			end,
+			{MRef, undefined},
+			State#gsups_state.ues),
+	Res.
+
 find_or_new_gsups_ue(Imsi, State) ->
 	UE = find_gsups_ue_by_imsi(Imsi, State),
 	case UE of
@@ -406,12 +427,19 @@ find_or_new_gsups_ue(Imsi, State) ->
 	end.
 
 delete_gsups_ue(UE, State) ->
+	erlang:demonitor(UE#gsups_ue.mref, [flush]),
 	SetRemoved = sets:del_element(UE, State#gsups_state.ues),
 	lager:debug("Removed UE ~p from ~p~n", [UE, SetRemoved]),
 	State#gsups_state{ues = SetRemoved}.
 
 delete_gsups_ue_by_imsi(Imsi, State) ->
 	case find_gsups_ue_by_imsi(Imsi, State) of
+	undefined -> State;
+	UE-> delete_gsups_ue(UE, State)
+	end.
+
+delete_gsups_ue_by_mref(MRef, State) ->
+	case find_gsups_ue_by_mref(MRef, State) of
 	undefined -> State;
 	UE-> delete_gsups_ue(UE, State)
 	end.
