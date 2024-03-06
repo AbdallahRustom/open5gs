@@ -40,6 +40,7 @@
 
 -export([ip_to_bin/1, bin_to_ip/1]).
 -export([cause_gtp2gsup/1]).
+-export([dia_rc_to_gsup_cause/1]).
 -export([gtp2_paa_to_epdg_eua/1, epdg_eua_to_gsup_pdp_address/1]).
 -export([nai_to_imsi/1]).
 
@@ -75,6 +76,32 @@ cause_gtp2gsup(?GTP2_CAUSE_MANDATORY_IE_INCORRECT) -> ?GSUP_CAUSE_INV_MAND_INFO;
 cause_gtp2gsup(?GTP2_CAUSE_MANDATORY_IE_MISSING) -> ?GSUP_CAUSE_INV_MAND_INFO;
 cause_gtp2gsup(_) -> ?GSUP_CAUSE_PROTO_ERR_UNSPEC.
 
+
+-define(DIA_VENDOR_3GPP, 10415).
+% transient (only in Experimental-Result-Code)
+-define(DIAMETER_AUTHENTICATION_DATA_UNAVAILABLE,	4181).
+-define(DIAMETER_ERROR_CAMEL_SUBSCRIPTION_PRESENT,	4182).
+% permanent (only in Experimental-Result-Code)
+-define(DIAMETER_ERROR_USER_UNKNOWN,			5001).
+-define(DIAMETER_AUTHORIZATION_REJECTED,		5003).
+-define(DIAMETER_ERROR_ROAMING_NOT_ALLOWED,		5004).
+-define(DIAMETER_MISSING_AVP,				5005).
+-define(DIAMETER_UNABLE_TO_COMPLY,			5012).
+-define(DIAMETER_ERROR_UNKNOWN_EPS_SUBSCRIPTION,	5420).
+-define(DIAMETER_ERROR_RAT_NOT_ALLOWED,			5421).
+-define(DIAMETER_ERROR_EQUIPMENT_UNKNOWN,		5422).
+-define(DIAMETER_ERROR_UNKOWN_SERVING_NODE,		5423).
+
+-spec dia_rc_to_gsup_cause(#epdg_dia_rc{}) -> non_neg_integer().
+dia_rc_to_gsup_cause(#epdg_dia_rc{result_code = 2001}) -> 0;
+dia_rc_to_gsup_cause(#epdg_dia_rc{result_code = 2002}) -> 0;
+dia_rc_to_gsup_cause(#epdg_dia_rc{result_code = ?DIAMETER_ERROR_USER_UNKNOWN}) -> ?GSUP_CAUSE_IMSI_UNKNOWN;
+dia_rc_to_gsup_cause(#epdg_dia_rc{result_code = ?DIAMETER_AUTHORIZATION_REJECTED}) -> ?GSUP_CAUSE_LA_NOTALLOWED;
+dia_rc_to_gsup_cause(#epdg_dia_rc{result_code = ?DIAMETER_ERROR_ROAMING_NOT_ALLOWED}) -> ?GSUP_CAUSE_ROAMING_NOTALLOWED;
+dia_rc_to_gsup_cause(#epdg_dia_rc{result_code = ?DIAMETER_ERROR_UNKNOWN_EPS_SUBSCRIPTION}) -> ?GSUP_CAUSE_NO_SUIT_CELL_IN_LA;
+dia_rc_to_gsup_cause(#epdg_dia_rc{result_code = ?DIAMETER_UNABLE_TO_COMPLY}) -> ?GSUP_CAUSE_NET_FAIL;
+dia_rc_to_gsup_cause(#epdg_dia_rc{result_code = ?DIAMETER_MISSING_AVP}) -> ?GSUP_CAUSE_PROTO_ERR_UNSPEC;
+dia_rc_to_gsup_cause(_) -> ?GSUP_CAUSE_NET_FAIL.
 
 gtp2_paa_to_epdg_eua(#v2_pdn_address_allocation{type = ipv4, address = Addr}) ->
         #epdg_eua{type_nr = ?GTP_PDP_ADDR_TYPE_NR_IPv4,

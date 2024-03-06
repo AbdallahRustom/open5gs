@@ -70,18 +70,27 @@ prepare_retransmit(Packet, SvcName, Peer, ExtraPars) ->
 %% handle_answer/4
 handle_answer(#diameter_packet{msg = Msg, errors = Errors}, _Request, _SvcName, Peer, ReqPid) when is_record(Msg, 'MAA')  ->
     lager:info("SWx Rx MAA ~p: ~p/ Errors ~p ~n", [Peer, Msg, Errors]),
-    #'MAA'{'SIP-Auth-Data-Item' = SipAuthTuples} = Msg,
-    AuthTuples = lists:map(fun dia_sip2epdg_auth_tuple/1, SipAuthTuples),
-    % TODO: handle error case....
-    aaa_ue_fsm:ev_rx_swx_maa(ReqPid, {ok, AuthTuples}),
+    #'MAA'{'Result-Code' = ResultCodeOpt,
+           'Experimental-Result' = ExperimentalResultOpt} = Msg,
+    DiaRC = parse_epdg_dia_rc(ResultCodeOpt, ExperimentalResultOpt),
+    case dia_rc_success(DiaRC) of
+    ok ->
+        #'MAA'{'SIP-Auth-Data-Item' = SipAuthTuples} = Msg,
+        AuthTuples = lists:map(fun dia_sip2epdg_auth_tuple/1, SipAuthTuples),
+        aaa_ue_fsm:ev_rx_swx_maa(ReqPid, {ok, AuthTuples});
+    _ ->
+        aaa_ue_fsm:ev_rx_swx_maa(ReqPid, {error, DiaRC})
+    end,
     {ok, Msg};
 handle_answer(#diameter_packet{msg = Msg, errors = Errors}, Request, _SvcName, Peer, ReqPid) when is_record(Msg, 'SAA')  ->
     lager:info("SWx Rx SAA ~p: ~p/ Errors ~p ~n", [Peer, Msg, Errors]),
     % Recover fields from originating request:
     #'SAR'{'Server-Assignment-Type' = SAType} = Request,
     % Retrieve fields from answer:
-    #'SAA'{'Result-Code' = [ResultCode]} = Msg,
-    case result_code_success(ResultCode) of
+    #'SAA'{'Result-Code' = ResultCodeOpt,
+           'Experimental-Result' = ExperimentalResultOpt} = Msg,
+    DiaRC = parse_epdg_dia_rc(ResultCodeOpt, ExperimentalResultOpt),
+    case dia_rc_success(DiaRC) of
     ok ->
         #'SAA'{'Non-3GPP-User-Data' = N3UA} = Msg,
         PGWAddresses = parse_pgw_addr_from_N3UA(N3UA),
@@ -91,7 +100,7 @@ handle_answer(#diameter_packet{msg = Msg, errors = Errors}, Request, _SvcName, P
         end,
         aaa_ue_fsm:ev_rx_swx_saa(ReqPid, {ok, SAType, ResInfo});
     _ ->
-        aaa_ue_fsm:ev_rx_swx_saa(ReqPid, {error, SAType, ResultCode})
+        aaa_ue_fsm:ev_rx_swx_saa(ReqPid, {error, SAType, DiaRC})
     end,
     {ok, Msg}.
 handle_answer(#diameter_packet{msg = Msg, errors = []}, _Request, _SvcName, Peer) ->
@@ -121,9 +130,19 @@ handle_request(_Packet, _SvcName, _Peer) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-result_code_success(2001) -> ok;
-result_code_success(2002) -> ok;
-result_code_success(_) -> invalid_result_code.
+dia_rc_success(#epdg_dia_rc{result_code = 2001}) -> ok;
+dia_rc_success(#epdg_dia_rc{result_code = 2002}) -> ok;
+dia_rc_success(_) -> invalid_result_code.
+
+parse_epdg_dia_rc([], []) ->
+    #epdg_dia_rc{vendor_id = undefined, result_code = 2001 };
+parse_epdg_dia_rc([ResultCode], []) ->
+    #epdg_dia_rc{vendor_id = undefined, result_code = ResultCode };
+parse_epdg_dia_rc([], [ExpResultCode]) ->
+    #'Experimental-Result'{'Vendor-Id' = VendorId, 'Experimental-Result-Code' = ERC} = ExpResultCode,
+    #epdg_dia_rc{vendor_id = VendorId, result_code = ERC };
+parse_epdg_dia_rc([ResultCode], [_ExpResultCode]) ->
+    parse_epdg_dia_rc([ResultCode], []).
 
 dia_sip2epdg_auth_tuple(#'SIP-Auth-Data-Item'{'SIP-Authenticate' = [Authenticate],
                                               'SIP-Authorization' = [Authorization],

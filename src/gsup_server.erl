@@ -122,7 +122,12 @@ handle_cast({auth_response, {Imsi, Result}}, State) ->
 					imsi => Imsi,
 					auth_tuples => lists:map(fun epdg_auth_tuple2gsup/1, AuthTuples)
 					};
-		{error, _} ->	Resp = #{message_type => send_auth_info_err, imsi => Imsi, message_class => 5, cause => ?GSUP_CAUSE_NET_FAIL}
+		{error, Gsupcause} ->
+				Resp = #{message_type => send_auth_info_err,
+					 imsi => Imsi,
+					 message_class => 5,
+					 cause => Gsupcause
+					}
 	end,
 	tx_gsup(Socket, Resp),
 	{noreply, State};
@@ -131,15 +136,17 @@ handle_cast({lu_response, {Imsi, Result}}, State) ->
 	lager:info("lu_response for ~p: ~p~n", [Imsi, Result]),
 	Socket = State#gsups_state.socket,
 	case Result of
-		ok ->	Resp = #{message_type => location_upd_res,
-					 imsi => Imsi,
-					 message_class => 5
-					 };
-		{error, _} ->	Resp = #{message_type => location_upd_err,
-					 imsi => Imsi,
-					 message_class => 5,
-					 cause => ?GSUP_CAUSE_NET_FAIL
-					 }
+		ok ->
+			Resp = #{message_type => location_upd_res,
+				 imsi => Imsi,
+				 message_class => 5
+				 };
+		{error, Gsupcause} ->
+			Resp = #{message_type => location_upd_err,
+				 imsi => Imsi,
+				 message_class => 5,
+				 cause => Gsupcause
+				}
 	end,
 	tx_gsup(Socket, Resp),
 	{noreply, State};

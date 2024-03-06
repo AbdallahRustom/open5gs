@@ -37,6 +37,7 @@
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter_3gpp_ts29_229.hrl").
 -include_lib("diameter_3gpp_ts29_273_s6b.hrl").
+-include("conv.hrl").
 
 -export([start_link/1]).
 -export([init/1,callback_mode/0,terminate/3]).
@@ -175,7 +176,6 @@ state_wait_swx_maa(enter, _OldState, Data) ->
 state_wait_swx_maa({call, From}, {rx_swx_maa, Result}, Data) ->
         lager:info("ue_fsm state_wait_swx_maa event=rx_swx_maa, ~p~n", [Data]),
         aaa_diameter_swm:auth_response(Data#ue_fsm_data.imsi, Result),
-        % TODO: don't transit if SAS returned error code.
         {next_state, state_new, Data, [{reply,From,ok}]}.
 
 state_wait_swx_saa(enter, _OldState, Data) ->
@@ -184,8 +184,8 @@ state_wait_swx_saa(enter, _OldState, Data) ->
 state_wait_swx_saa({call, From}, {rx_swx_saa, Result}, Data) ->
         lager:info("ue_fsm state_wait_swx_saa event=rx_swx_saa ~p, ~p~n", [Result, Data]),
         case Result of
-        {error, _SAType, ResultCode} ->
-                aaa_diameter_swm:auth_compl_response(Data#ue_fsm_data.imsi, {error, ResultCode}),
+        {error, _SAType, DiaRC} ->
+                aaa_diameter_swm:auth_compl_response(Data#ue_fsm_data.imsi, {error, DiaRC}),
                 {next_state, state_new, Data, [{reply,From,ok}]};
         {ok, _SAType, ResInfo} ->
                 aaa_diameter_swm:auth_compl_response(Data#ue_fsm_data.imsi, {ok, ResInfo}),
@@ -263,7 +263,7 @@ state_authenticated_wait_swx_saa(enter, _OldState, Data) ->
 
 state_authenticated_wait_swx_saa({call, From}, {rx_swx_saa, Result}, Data) ->
         case Result of
-        {error, SAType, ResultCode} -> ResultCode;
+        {error, SAType, DiaRC} -> ResultCode = DiaRC#epdg_dia_rc.result_code;
         {ok, SAType, _ResInfo} -> ResultCode = 2001
         end,
         lager:info("ue_fsm state_authenticated_wait_swx_saa event=rx_swx_saa SAType=~p ResulCode=~p, ~p~n", [SAType, ResultCode, Data]),

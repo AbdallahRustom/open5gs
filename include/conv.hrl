@@ -31,6 +31,12 @@
 %
 -hrl_name('conv.hrl').
 
+%% Can Hold information about Result-Code or Experimental-Result:
+-record(epdg_dia_rc, {
+        vendor_id      :: non_neg_integer(), %% or undefined if Result-Code
+        result_code    :: non_neg_integer()
+}).
+
 -record(epdg_eua, {
         type_nr :: non_neg_integer(),
         ipv4    :: binary(),

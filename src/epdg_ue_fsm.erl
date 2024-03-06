@@ -218,12 +218,14 @@ state_wait_auth_resp(enter, _OldState, Data) ->
 
 state_wait_auth_resp({call, From}, {received_swm_auth_response, Result}, Data) ->
         lager:info("ue_fsm state_wait_auth_resp event=received_swm_auth_response Result=~p, ~p~n", [Result, Data]),
-        gsup_server:auth_response(Data#ue_fsm_data.imsi, Result),
         case Result of
-                {ok, _} ->
+                {ok, _AuthTuples} ->
+                        gsup_server:auth_response(Data#ue_fsm_data.imsi, Result),
                         {next_state, state_authenticating, Data, [{reply,From,ok}]};
-                {error, Err} ->
-                        {next_state, state_new, Data, [{reply,From,{error,Err}}]};
+                {error, DiaRC} ->
+                        GsupCause = conv:dia_rc_to_gsup_cause(DiaRC),
+                        gsup_server:auth_response(Data#ue_fsm_data.imsi, {error, GsupCause}),
+                        {next_state, state_new, Data, [{reply,From,ok}]};
                 _ ->
                         {next_state, state_new, Data, [{reply,From,{error,unknown}}]}
         end.
@@ -257,13 +259,12 @@ state_authenticating({call, From}, {received_swm_auth_compl_response, Result}, D
                 PGWAddrCandidateList ->
                         Data1 = Data#ue_fsm_data{pgw_rem_addr_list = PGWAddrCandidateList}
                 end,
-                Ret = ok,
-                gsup_server:lu_response(Data1#ue_fsm_data.imsi, Ret),
-                {next_state, state_authenticated, Data1, [{reply,From,Ret}]};
-        {error, Err} ->
-                Ret = {error, Err},
-                gsup_server:lu_response(Data#ue_fsm_data.imsi, Ret),
-                {next_state, state_new, Data, [{reply,From,Ret}]}
+                gsup_server:lu_response(Data1#ue_fsm_data.imsi, ok),
+                {next_state, state_authenticated, Data1, [{reply,From,ok}]};
+        {error, DiaRC} ->
+                GsupCause = conv:dia_rc_to_gsup_cause(DiaRC),
+                gsup_server:lu_response(Data#ue_fsm_data.imsi, {error, GsupCause}),
+                {next_state, state_new, Data, [{reply,From,ok}]}
         end.
 
 state_authenticated(enter, _OldState, Data) ->
