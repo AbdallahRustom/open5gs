@@ -176,6 +176,12 @@ received_gtpc_delete_bearer_request(Pid) ->
 %% Internal helpers
 %% ------------------------------------------------------------------
 
+ev_handle({call, From}, {auth_request, PdpTypeNr, Apn}, Data) ->
+        case epdg_diameter_swm:auth_request(Data#ue_fsm_data.imsi, PdpTypeNr, Apn) of
+        ok -> {next_state, state_wait_auth_resp, Data, [{reply,From,ok}]};
+        {error, Err} -> {stop_and_reply, Err, Data, [{reply,From,{error,Err}}]}
+	end.
+
 %% ------------------------------------------------------------------
 %% gen_statem Function Definitions
 %% ------------------------------------------------------------------
@@ -199,12 +205,9 @@ terminate(Reason, State, Data) ->
 state_new(enter, _OldState, Data) ->
         {keep_state, Data};
 
-state_new({call, From}, {auth_request, PdpTypeNr, Apn}, Data) ->
+state_new({call, _From} = EvType, {auth_request, PdpTypeNr, Apn} = EvContent, Data) ->
         lager:info("ue_fsm state_new event=auth_request {~p, ~p}, ~p~n", [PdpTypeNr, Apn, Data]),
-        case epdg_diameter_swm:auth_request(Data#ue_fsm_data.imsi, PdpTypeNr, Apn) of
-        ok -> {next_state, state_wait_auth_resp, Data, [{reply,From,ok}]};
-        {error, Err} -> {stop_and_reply, Err, Data, [{reply,From,{error,Err}}]}
-	end;
+        ev_handle(EvType, EvContent, Data);
 
 state_new({call, From}, purge_ms_request, Data) ->
         lager:info("ue_fsm state_new event=purge_ms_request, ~p~n", [Data]),
@@ -227,6 +230,10 @@ state_wait_auth_resp({call, From}, {received_swm_auth_response, Result}, Data) -
 
 state_authenticating(enter, _OldState, Data) ->
         {keep_state, Data};
+
+state_authenticating({call, _From} = EvType, {auth_request, PdpTypeNr, Apn} = EvContent, Data) ->
+        lager:info("ue_fsm state_authenticating event=auth_request {~p, ~p}, ~p~n", [PdpTypeNr, Apn, Data]),
+        ev_handle(EvType, EvContent, Data);
 
 state_authenticating({call, From}, lu_request, Data) ->
         lager:info("ue_fsm state_authenticating event=lu_request, ~p~n", [Data]),
