@@ -232,12 +232,13 @@ state_authenticated({call, {Pid, _Tag} = From}, rx_s6b_str, Data) ->
         lager:info("ue_fsm state_authenticated event=rx_s6b_str, ~p~n", [Data]),
         case {Data#ue_fsm_data.pgw_sess_active, Data#ue_fsm_data.epdg_sess_active} of
         {false, _} -> %% The S6b session is not active...
-                DiaRC = 5002, %% UNKNOWN_SESSION_ID
+                DiaRC = #epdg_dia_rc{result_code = 5002}, %% UNKNOWN_SESSION_ID
                 {keep_state, Data, [{reply,From,{error, DiaRC}}]};
         {true, true} -> %% The other session is still active, no need to send SAR Type=USER_DEREGISTRATION
                 lager:info("ue_fsm state_authenticated event=rx_s6b_str: ePDG session still active, skip updating the HSS~n", []),
                 Data1 = Data#ue_fsm_data{pgw_sess_active = false},
-                {keep_state, Data1, [{reply,From,{ok, 2001}}]};
+                DiaRC = #epdg_dia_rc{result_code = 2001}, %% SUCCESS
+                {keep_state, Data1, [{reply,From,{ok, DiaRC}}]};
         {true, false} -> %% All sessions will now be gone, trigger SAR Type=USER_DEREGISTRATION
                 case aaa_diameter_swx:server_assignment_request(Data#ue_fsm_data.imsi,
                                                                 ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_USER_DEREGISTRATION',
@@ -245,7 +246,7 @@ state_authenticated({call, {Pid, _Tag} = From}, rx_s6b_str, Data) ->
                 ok ->   Data1 = Data#ue_fsm_data{s6b_resp_pid = Pid},
                         {next_state, state_authenticated_wait_swx_saa, Data1, [{reply,From,ok}]};
                 {error, _Err} ->
-                        DiaRC = 5002, %% UNKNOWN_SESSION_ID
+                        DiaRC = #epdg_dia_rc{result_code = 5002}, %% UNKNOWN_SESSION_ID
                         {keep_state, Data, [{reply,From,{error, DiaRC}}]}
                 end
         end;
@@ -263,23 +264,23 @@ state_authenticated_wait_swx_saa(enter, _OldState, Data) ->
 
 state_authenticated_wait_swx_saa({call, From}, {rx_swx_saa, Result}, Data) ->
         case Result of
-        {error, SAType, DiaRC} -> ResultCode = DiaRC#epdg_dia_rc.result_code;
-        {ok, SAType, _ResInfo} -> ResultCode = 2001
+        {error, SAType, DiaRC} -> DiaRC;
+        {ok, SAType, _ResInfo} -> DiaRC = #epdg_dia_rc{result_code = 2001}
         end,
-        lager:info("ue_fsm state_authenticated_wait_swx_saa event=rx_swx_saa SAType=~p ResulCode=~p, ~p~n", [SAType, ResultCode, Data]),
+        lager:info("ue_fsm state_authenticated_wait_swx_saa event=rx_swx_saa SAType=~p ResulCode=~p, ~p~n", [SAType, DiaRC, Data]),
         case SAType of
         ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_PGW_UPDATE' ->
-                aaa_diameter_s6b:tx_aa_answer(Data#ue_fsm_data.s6b_resp_pid, ResultCode),
+                aaa_diameter_s6b:tx_aa_answer(Data#ue_fsm_data.s6b_resp_pid, DiaRC),
                 Data1 = Data#ue_fsm_data{pgw_sess_active = true, s6b_resp_pid = undefined},
                 {next_state, state_authenticated, Data1, [{reply,From,ok}]};
         ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_USER_DEREGISTRATION' ->
                 case Data#ue_fsm_data.s6b_resp_pid of
                 undefined -> %% SWm initiated
-                        aaa_diameter_swm:session_termination_answer(Data#ue_fsm_data.imsi, ResultCode),
+                        aaa_diameter_swm:session_termination_answer(Data#ue_fsm_data.imsi, DiaRC),
                         Data1 = Data#ue_fsm_data{epdg_sess_active = false},
                         {next_state, state_new, Data1, [{reply,From,ok}]};
                 _ -> %% S6b initiated
-                        aaa_diameter_s6b:tx_st_answer(Data#ue_fsm_data.s6b_resp_pid, ResultCode),
+                        aaa_diameter_s6b:tx_st_answer(Data#ue_fsm_data.s6b_resp_pid, DiaRC),
                         Data1 = Data#ue_fsm_data{pgw_sess_active = false, s6b_resp_pid = undefined},
                         {next_state, state_new, Data1, [{reply,From,ok}]}
                 end

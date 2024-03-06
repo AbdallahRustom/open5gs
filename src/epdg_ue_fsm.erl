@@ -402,11 +402,11 @@ state_wait_swm_session_termination_answer(enter, _OldState, Data) ->
                 {keep_state, Data}
         end;
 
-state_wait_swm_session_termination_answer({call, From}, {received_swm_sta, DiaResultCode}, Data) ->
+state_wait_swm_session_termination_answer({call, From}, {received_swm_sta, DiaRC}, Data) ->
         lager:info("ue_fsm state_wait_swm_session_termination_answer event=received_swm_sta, ~p~n", [Data]),
         case Data#ue_fsm_data.tear_down_gsup_needed of
         true ->
-                case {DiaResultCode, Data#ue_fsm_data.tear_down_gsup_cause} of
+                case {DiaRC#epdg_dia_rc.result_code, Data#ue_fsm_data.tear_down_gsup_cause} of
                 {2001, 0} -> gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, ok);
                 {2001, _} -> gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, {error, Data#ue_fsm_data.tear_down_gsup_cause});
                 _ -> gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, {error, ?GSUP_CAUSE_NET_FAIL})

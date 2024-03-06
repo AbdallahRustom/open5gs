@@ -6,6 +6,8 @@
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter_3gpp_ts29_273_s6b.hrl").
 
+-include("conv.hrl").
+
 %% diameter callbacks
 -export([peer_up/3, peer_down/3, pick_peer/4, prepare_request/3, prepare_retransmit/3,
          handle_answer/4, handle_error/4, handle_request/3]).
@@ -67,15 +69,15 @@ handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) wh
         ok = aaa_ue_fsm:ev_rx_s6b_aar(PidRes, {Apn, AgentInfoOpt}),
         lager:debug("Waiting for S6b AAA~n", []),
         receive
-            {aaa, ResultCode} -> lager:debug("Rx AAA with ResultCode=~p~n", [ResultCode])
+            {aaa, DiaRC} -> lager:debug("Rx AAA with DiaRC=~p~n", [DiaRC])
         end;
     undefined -> lager:error("Error looking up FSM for IMSI~n", [Imsi]),
-         ResultCode = ?'RULE-FAILURE-CODE_CM_AUTHORIZATION_REJECTED'
+         DiaRC = #epdg_dia_rc{result_code = ?'RULE-FAILURE-CODE_CM_AUTHORIZATION_REJECTED'}
     end,
     Resp = #'AAA'{'Session-Id'= SessionId,
                   'Auth-Application-Id' = AuthAppId,
                   'Auth-Request-Type' = AuthReqType,
-                  'Result-Code' = ResultCode,
+                  'Result-Code' = DiaRC#epdg_dia_rc.result_code,
                   'Origin-Host' = OH,
                   'Origin-Realm' = OR},
     lager:info("S6b Tx to ~p: ~p~n", [Caps, Resp]),
@@ -97,10 +99,12 @@ handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) wh
         ok ->
             lager:debug("Waiting for S6b STA~n", []),
             receive
-                {sta, ResultCode} -> lager:debug("Rx STA with ResultCode=~p~n", [ResultCode])
+                {sta, DiaRC} ->
+                    ResultCode = DiaRC#epdg_dia_rc.result_code,
+                    lager:debug("Rx STA with ResultCode=~p~n", [ResultCode])
             end;
-        {ok, DiaRC} when is_integer(DiaRC) ->
-            ResultCode = DiaRC;
+        {ok, DiaRC} ->
+            ResultCode = DiaRC#epdg_dia_rc.result_code;
         {error, Err} when is_integer(Err) ->
             ResultCode = Err;
         {error, _} ->

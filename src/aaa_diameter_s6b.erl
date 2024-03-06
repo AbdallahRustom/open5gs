@@ -147,13 +147,13 @@ server_assignment_request(IMSI, Type, APN) ->
     gen_server:call(?SERVER,
                           {sar, {IMSI, Type, APN}}).
 
-tx_aa_answer(Pid, ResultCode) ->
+tx_aa_answer(Pid, DiaRC) ->
     % handle_request(AAR) was spawned into its own process, and it's blocked waiting for AAA:
-    Pid ! {aaa, ResultCode}.
+    Pid ! {aaa, DiaRC}.
 
-tx_st_answer(Pid, ResultCode) ->
+tx_st_answer(Pid, DiaRC) ->
     % handle_request(STR) was spawned into its own process, and it's blocked waiting for STA:
-    Pid ! {sta, ResultCode}.
+    Pid ! {sta, DiaRC}.
 
 result_code_success(2001) -> ok;
 result_code_success(2002) -> ok;
