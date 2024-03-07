@@ -39,7 +39,7 @@
 -include_lib("gtp_utils.hrl").
 -include("conv.hrl").
 
--export([start_monitor/1, stop/1]).
+-export([start/1, stop/1]).
 -export([init/1,callback_mode/0,terminate/3]).
 -export([get_server_name_by_imsi/1, get_pid_by_imsi/1]).
 -export([auth_request/2, lu_request/1, tunnel_request/2, purge_ms_request/1]).
@@ -68,10 +68,10 @@ get_pid_by_imsi(Imsi) ->
         ServerName = get_server_name_by_imsi(Imsi),
         whereis(ServerName).
 
-start_monitor(Imsi) ->
+start(Imsi) ->
         ServerName = get_server_name_by_imsi(Imsi),
-        lager:info("ue_fsm start_monitor(~p)~n", [ServerName]),
-        gen_statem:start_monitor({local, ServerName}, ?MODULE, Imsi, [{debug, [trace]}]).
+        lager:info("ue_fsm start(~p)~n", [ServerName]),
+        gen_statem:start({local, ServerName}, ?MODULE, Imsi, [{debug, [trace]}]).
 
 stop(SrvRef) ->
         try

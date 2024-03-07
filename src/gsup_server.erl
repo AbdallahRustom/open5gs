@@ -49,14 +49,7 @@
 	lsocket, % listening socket
 	lport, % local port. only interesting if we bind with port 0
 	socket, % current active socket. we only support a single tcp connection
-	ccm_options, % ipa ccm options
-	ues = sets:new()
-	}).
-
--record(gsups_ue, {
-	imsi                   :: binary(),
-	pid                    :: pid(),
-	mref                   :: reference()
+	ccm_options % ipa ccm options
 	}).
 
 -export([start_link/3]).
@@ -180,9 +173,9 @@ handle_cast({tunnel_response, {Imsi, Result}}, State) ->
 	tx_gsup(Socket, Resp),
 	{noreply, State};
 
-handle_cast({purge_ms_response, {Imsi, Result}}, State0) ->
+handle_cast({purge_ms_response, {Imsi, Result}}, State) ->
 	lager:info("purge_ms_response for ~p: ~p~n", [Imsi, Result]),
-	Socket = State0#gsups_state.socket,
+	Socket = State#gsups_state.socket,
 	case Result of
 		ok ->
 			Resp = #{message_type => purge_ms_res,
@@ -196,8 +189,11 @@ handle_cast({purge_ms_response, {Imsi, Result}}, State0) ->
 				}
 	end,
 	tx_gsup(Socket, Resp),
-	State1 = delete_gsups_ue_by_imsi(Imsi, State0),
-	{noreply, State1};
+	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
+		Pid when is_pid(Pid) -> epdg_ue_fsm:stop(Pid);
+		undefined -> ok
+	end,
+	{noreply, State};
 
 % Our GSUP CEAI implementation for "IKEv2 Information Delete Request"
 handle_cast({cancel_location_request, Imsi}, State) ->
@@ -232,11 +228,6 @@ handle_info({ipa_tcp_accept, Socket}, S) ->
 handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx}, State) ->
 	lager:info("GSUP: Rx ~p~n", [GsupMsgRx]),
 	rx_gsup(Socket, GsupMsgRx, State);
-
-handle_info({'DOWN', MRef, process, Pid, Reason}, State0) ->
-	lager:notice("GSUP: epdg_ue_fsm ~p exited, reason: ~p~n", [Pid, Reason]),
-	State1 = delete_gsups_ue_by_mref(MRef, State0),
-	{noreply, State1};
 
 handle_info(Info, S) ->
 	error_logger:error_report(["unknown handle_info", {module, ?MODULE}, {info, Info}, {state, S}]),
@@ -274,7 +265,7 @@ cancel_location_request(Imsi) ->
 %% ------------------------------------------------------------------
 
 % Rx send auth info / requesting authentication tuples
-rx_gsup(Socket, GsupMsgRx = #{message_type := send_auth_info_req, imsi := Imsi}, State0) ->
+rx_gsup(Socket, GsupMsgRx = #{message_type := send_auth_info_req, imsi := Imsi}, State) ->
 	case maps:find(pdp_info_list, GsupMsgRx) of
 	{ok, [PdpInfo]} ->
 		#{pdp_context_id := _PDPCtxId,
@@ -287,9 +278,12 @@ rx_gsup(Socket, GsupMsgRx = #{message_type := send_auth_info_req, imsi := Imsi},
 		PdpTypeNr = ?GTP_PDP_ADDR_TYPE_NR_IPv4,
 		Apn = "*"
 	end,
-	{UE, State1} = find_or_new_gsups_ue(Imsi, State0),
-	case epdg_ue_fsm:auth_request(UE#gsups_ue.pid, {PdpTypeNr, Apn}) of
-	ok -> State2 = State1;
+	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
+		undefined -> {ok, Pid} = epdg_ue_fsm:start(Imsi);
+		Pid -> Pid
+	end,
+	case epdg_ue_fsm:auth_request(Pid, {PdpTypeNr, Apn}) of
+	ok -> ok;
 	{error, Err} ->
 		lager:error("Auth Req for Imsi ~p failed: ~p~n", [Imsi, Err]),
 		Resp = #{message_type => send_auth_info_err,
@@ -298,17 +292,15 @@ rx_gsup(Socket, GsupMsgRx = #{message_type := send_auth_info_req, imsi := Imsi},
 			 cause => ?GSUP_CAUSE_NET_FAIL
 		},
 		tx_gsup(Socket, Resp),
-		State2 = delete_gsups_ue(UE, State1),
-		epdg_ue_fsm:stop(UE#gsups_ue.pid)
+		epdg_ue_fsm:stop(Pid)
 	end,
-	{noreply, State2};
+	{noreply, State};
 
 % location update request / when a UE wants to connect to a specific APN. This will trigger a AAA->HLR Request Server Assignment Request
 rx_gsup(Socket, _GsupMsgRx = #{message_type := location_upd_req, imsi := Imsi}, State) ->
-	UE = find_gsups_ue_by_imsi(Imsi, State),
-	case UE of
-	#gsups_ue{imsi = Imsi} ->
-		case epdg_ue_fsm:lu_request(UE#gsups_ue.pid) of
+	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
+	Pid when is_pid(Pid) ->
+		case epdg_ue_fsm:lu_request(Pid) of
 		ok -> ok;
 		{error, _} ->
 			Resp = #{message_type => location_upd_err,
@@ -331,10 +323,9 @@ rx_gsup(Socket, _GsupMsgRx = #{message_type := location_upd_req, imsi := Imsi}, 
 % epdg tunnel request / trigger the establishment to the PGW and prepares everything for the user traffic to flow
 % When sending a epdg_tunnel_response everything must be ready for the UE traffic
 rx_gsup(Socket, _GsupMsgRx = #{message_type := epdg_tunnel_request, imsi := Imsi, pco := PCO}, State) ->
-	UE = find_gsups_ue_by_imsi(Imsi, State),
-	case UE of
-	#gsups_ue{imsi = Imsi} ->
-		case epdg_ue_fsm:tunnel_request(UE#gsups_ue.pid, PCO) of
+	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
+	Pid when is_pid(Pid) ->
+		case epdg_ue_fsm:tunnel_request(Pid, PCO) of
 		ok -> ok;
 		{error, _} ->
 			Resp = #{message_type => epdg_tunnel_error,
@@ -356,10 +347,9 @@ rx_gsup(Socket, _GsupMsgRx = #{message_type := epdg_tunnel_request, imsi := Imsi
 
 % Purge MS / trigger the delete of session to the PGW
 rx_gsup(Socket, _GsupMsgRx = #{message_type := purge_ms_req, imsi := Imsi}, State) ->
-	UE = find_gsups_ue_by_imsi(Imsi, State),
-	case UE of
-	#gsups_ue{imsi = Imsi} ->
-		case epdg_ue_fsm:purge_ms_request(UE#gsups_ue.pid) of
+	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
+	Pid when is_pid(Pid) ->
+		case epdg_ue_fsm:purge_ms_request(Pid) of
 		ok ->	ok;
 		_  ->	Resp = #{message_type => purge_ms_err,
 				imsi => Imsi,
@@ -379,13 +369,12 @@ rx_gsup(Socket, _GsupMsgRx = #{message_type := purge_ms_req, imsi := Imsi}, Stat
 	{noreply, State};
 
 % Our GSUP CEAI implementation for "IKEv2 Information Delete Response".
-rx_gsup(_Socket, _GsupMsgRx = #{message_type := location_cancellation_res, imsi := Imsi}, State0) ->
-	UE = find_gsups_ue_by_imsi(Imsi, State0),
-	case UE of
-	#gsups_ue{imsi = Imsi} -> State1 = delete_gsups_ue(UE, State0);
-	undefined -> State1 = State0
+rx_gsup(_Socket, _GsupMsgRx = #{message_type := location_cancellation_res, imsi := Imsi}, State) ->
+	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
+		Pid when is_pid(Pid) -> epdg_ue_fsm:stop(Pid);
+		undefined -> State
 	end,
-	{noreply, State1};
+	{noreply, State};
 
 rx_gsup(_Socket, GsupMsgRx, State) ->
 	lager:error("GSUP: Rx unimplemented msg: ~p~n", [GsupMsgRx]),
@@ -394,62 +383,3 @@ rx_gsup(_Socket, GsupMsgRx, State) ->
 tx_gsup(Socket, Msg) ->
 	lager:info("GSUP: Tx ~p~n", [Msg]),
 	ipa_proto:send(Socket, ?IPAC_PROTO_EXT_GSUP, Msg).
-
-
-new_gsups_ue(Imsi, State) ->
-	case epdg_ue_fsm:start_monitor(Imsi) of
-	{ok, {Pid, MRef}} -> ok;
-	{error,{already_started,PrevPid}} ->
-		lager:notice("epdg_ue_fsm for Imsi ~p already existed, reusing!: ~p~n", [Imsi, PrevPid]),
-		Pid = PrevPid,
-		MRef = erlang:monitor(process, Pid)
-	end,
-	UE = #gsups_ue{imsi = Imsi, pid = Pid, mref = MRef},
-	NewSt = State#gsups_state{ues = sets:add_element(UE, State#gsups_state.ues)},
-	{UE, NewSt}.
-
-% returns gsups_ue if found, undefined it not
-find_gsups_ue_by_imsi(Imsi, State) ->
-	{Imsi, Res} = sets:fold(
-			fun(SessIt = #gsups_ue{imsi = LookupImsi}, {LookupImsi, _AccIn}) -> {LookupImsi, SessIt};
-			   (_, AccIn) -> AccIn
-			end,
-			{Imsi, undefined},
-			State#gsups_state.ues),
-	Res.
-
-find_gsups_ue_by_mref(MRef, State) ->
-	{MRef, Res} = sets:fold(
-			fun(SessIt = #gsups_ue{imsi = LookupMRef}, {LookupMRef, _AccIn}) -> {LookupMRef, SessIt};
-				(_, AccIn) -> AccIn
-			end,
-			{MRef, undefined},
-			State#gsups_state.ues),
-	Res.
-
-find_or_new_gsups_ue(Imsi, State) ->
-	UE = find_gsups_ue_by_imsi(Imsi, State),
-	case UE of
-	    #gsups_ue{imsi = Imsi} ->
-		{UE, State};
-	    undefined ->
-		new_gsups_ue(Imsi, State)
-	end.
-
-delete_gsups_ue(UE, State) ->
-	erlang:demonitor(UE#gsups_ue.mref, [flush]),
-	SetRemoved = sets:del_element(UE, State#gsups_state.ues),
-	lager:debug("Removed UE ~p from ~p~n", [UE, SetRemoved]),
-	State#gsups_state{ues = SetRemoved}.
-
-delete_gsups_ue_by_imsi(Imsi, State) ->
-	case find_gsups_ue_by_imsi(Imsi, State) of
-	undefined -> State;
-	UE-> delete_gsups_ue(UE, State)
-	end.
-
-delete_gsups_ue_by_mref(MRef, State) ->
-	case find_gsups_ue_by_mref(MRef, State) of
-	undefined -> State;
-	UE-> delete_gsups_ue(UE, State)
-	end.
