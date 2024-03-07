@@ -227,7 +227,10 @@ handle_info({ipa_tcp_accept, Socket}, S) ->
 %% Rx IPA/GSUP message:
 handle_info({ipa, Socket, ?IPAC_PROTO_EXT_GSUP, GsupMsgRx}, State) ->
 	lager:info("GSUP: Rx ~p~n", [GsupMsgRx]),
-	rx_gsup(Socket, GsupMsgRx, State);
+	misc:spawn_wait_ret(fun() ->
+				rx_gsup(Socket, GsupMsgRx, State)
+			    end,
+			    {noreply, State});
 
 handle_info(Info, S) ->
 	error_logger:error_report(["unknown handle_info", {module, ?MODULE}, {info, Info}, {state, S}]),
