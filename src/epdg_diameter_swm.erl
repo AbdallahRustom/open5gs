@@ -19,7 +19,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3, terminate/2]).
 
--export([auth_request/3, auth_compl_request/2, session_termination_request/1]).
+-export([auth_request/4, auth_compl_request/2, session_termination_request/1]).
 -export([auth_response/2, auth_compl_response/2, session_termination_answer/2]).
 
 -define(SERVER, ?MODULE).
@@ -33,13 +33,14 @@ init([]) ->
 	{ok, #swm_state{}}.
 
 
-auth_request(Imsi, PdpTypeNr, Apn) ->
+%% Swm Diameter message Diameter-EAP-Request, 3GPP TS 29.273 Table 7.1.2.1.1
+auth_request(Imsi, PdpTypeNr, Apn, EAP) ->
 	% In Diameter we use Imsi as strings, as done by diameter module.
 	ImsiStr = binary_to_list(Imsi),
-	% epdg_auth_req: Swm Diameter message Diameter-EAP-Request 3GPP TS 29.273 7.2.2.1.1
 	% PdpTypeNr: SWm Diameter AVP "UE-Local-IP-Address"
 	% Apn: SWm Diameter AVP "Service-Selection"
-	Result = gen_server:call(?SERVER, {epdg_auth_req, ImsiStr, PdpTypeNr, Apn}),
+	% EAP: SWm Diameter AVP EAP-Payload
+	Result = gen_server:call(?SERVER, {epdg_auth_req, ImsiStr, PdpTypeNr, Apn, EAP}),
 	case Result of
 		{ok, _AuthTuples} ->
 			epdg_ue_fsm:received_swm_auth_response(self(), Result),
@@ -71,10 +72,10 @@ session_termination_request(Imsi) ->
 		_ -> Result
 	end.
 
-handle_call({epdg_auth_req, Imsi, PdpTypeNr, Apn}, {Pid, _Tag} = _From, State0) ->
+handle_call({epdg_auth_req, Imsi, PdpTypeNr, Apn, EAP}, {Pid, _Tag} = _From, State0) ->
 	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
 	{_Sess, State1} = find_or_new_swm_session(Imsi, Pid, State0),
-	ok = aaa_diameter_swm:auth_request(Imsi, PdpTypeNr, Apn),
+	ok = aaa_diameter_swm:auth_request(Imsi, PdpTypeNr, Apn, EAP),
 	{reply, ok, State1};
 
 handle_call({epdg_auth_compl_req, Imsi, Apn}, _From, State) ->

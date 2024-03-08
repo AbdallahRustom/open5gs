@@ -67,10 +67,10 @@ start_link(Imsi) ->
         lager:info("ue_fsm start_link(~p)~n", [ServerName]),
         gen_statem:start_link({local, ServerName}, ?MODULE, Imsi, [{debug, [trace]}]).
 
-ev_swm_auth_req(Pid, {PdpTypeNr, Apn}) ->
+ev_swm_auth_req(Pid, {PdpTypeNr, Apn, EAP}) ->
         lager:info("ue_fsm ev_swm_auth_req~n", []),
         try
-                gen_statem:call(Pid, {swm_auth_req, PdpTypeNr, Apn})
+                gen_statem:call(Pid, {swm_auth_req, PdpTypeNr, Apn, EAP})
         catch
         exit:Err ->
                 {error, Err}
@@ -153,15 +153,16 @@ terminate(Reason, State, Data) ->
 state_new(enter, _OldState, Data) ->
         {keep_state, Data};
 
-state_new({call, From}, {swm_auth_req, PdpTypeNr, Apn}, Data) ->
-        lager:info("ue_fsm state_new event=swm_auth_req {~p, ~p}, ~p~n", [PdpTypeNr, Apn, Data]),
-	% request the diameter code for a tuple
-	CKey = [],
-	IntegrityKey = [],
-	case aaa_diameter_swx:multimedia_auth_request(Data#ue_fsm_data.imsi, 1, "EAP-AKA", 1, CKey, IntegrityKey, PdpTypeNr) of
-	ok -> {next_state, state_wait_swx_maa, Data, [{reply,From,ok}]};
-	{error, Err} -> {keep_state, Data, [{reply,From,{error, Err}}]}
-	end;
+state_new({call, From}, {swm_auth_req, PdpTypeNr, Apn, EAP}, Data) ->
+        lager:info("ue_fsm state_new event=swm_auth_req {~p, ~p, ~p}, ~p~n", [PdpTypeNr, Apn, EAP, Data]),
+        case maps:find(authorization, EAP) of
+        {ok, Authorization} when is_binary(Authorization) -> Authorization;
+        error -> Authorization = []
+        end,
+        case aaa_diameter_swx:multimedia_auth_request(Data#ue_fsm_data.imsi, 1, 1, "EAP-AKA", PdpTypeNr, Authorization) of
+        ok -> {next_state, state_wait_swx_maa, Data, [{reply,From,ok}]};
+        {error, Err} -> {keep_state, Data, [{reply,From,{error, Err}}]}
+        end;
 
 state_new({call, From}, {swm_auth_compl, Apn}, Data) ->
         lager:info("ue_fsm state_new event=swm_auth_compl, ~p~n", [Data]),
@@ -251,8 +252,8 @@ state_authenticated({call, {Pid, _Tag} = From}, rx_s6b_str, Data) ->
                 end
         end;
 
-state_authenticated({call, _From}, {swm_auth_req, PdpTypeNr, Apn}, Data) ->
-        lager:info("ue_fsm state_authenticated event=swm_auth_req {~p, ~p}, ~p~n", [PdpTypeNr, Apn, Data]),
+state_authenticated({call, _From}, {swm_auth_req, PdpTypeNr, Apn, EAP}, Data) ->
+        lager:info("ue_fsm state_authenticated event=swm_auth_req {~p, ~p, ~p}, ~p~n", [PdpTypeNr, Apn, EAP, Data]),
         {next_state, state_new, Data, [postpone]};
 
 state_authenticated({call, From}, Ev, Data) ->

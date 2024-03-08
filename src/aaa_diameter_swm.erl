@@ -20,7 +20,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3, terminate/2]).
 
--export([auth_request/3, auth_compl_request/2, session_termination_request/1]).
+-export([auth_request/4, auth_compl_request/2, session_termination_request/1]).
 -export([auth_response/2, auth_compl_response/2, session_termination_answer/2]).
 
 -define(SERVER, ?MODULE).
@@ -47,8 +47,8 @@ session_termination_answer(Imsi, Result) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Rx from emulated SWm wire:
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-auth_request(Imsi, PdpTypeNr, Apn) ->
-	gen_server:cast(?SERVER, {epdg_auth_req, Imsi, PdpTypeNr, Apn}).
+auth_request(Imsi, PdpTypeNr, Apn, EAP) ->
+	gen_server:cast(?SERVER, {epdg_auth_req, Imsi, PdpTypeNr, Apn, EAP}).
 
 auth_compl_request(Imsi, Apn) ->
 	gen_server:cast(?SERVER, {epdg_auth_compl_req, Imsi, Apn}).
@@ -56,9 +56,9 @@ auth_compl_request(Imsi, Apn) ->
 session_termination_request(Imsi) ->
 	gen_server:cast(?SERVER, {str, Imsi}).
 
-handle_cast({epdg_auth_req, Imsi, PdpTypeNr, Apn}, State0) ->
+handle_cast({epdg_auth_req, Imsi, PdpTypeNr, Apn, EAP}, State0) ->
 	{Sess, State1} = find_or_new_swm_session(Imsi, State0),
-	aaa_ue_fsm:ev_swm_auth_req(Sess#swm_session.pid, {PdpTypeNr, Apn}),
+	aaa_ue_fsm:ev_swm_auth_req(Sess#swm_session.pid, {PdpTypeNr, Apn, EAP}),
 	{noreply, State1};
 
 handle_cast({epdg_auth_compl_req, Imsi, Apn}, State) ->

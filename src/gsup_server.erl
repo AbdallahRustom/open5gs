@@ -267,6 +267,19 @@ cancel_location_request(Imsi) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
+%% Put params transparent to ePDG in a container, they are for AAA Server (RFC7296):
+parse_eap(GsupMsgRx = #{message_type := send_auth_info_req}) ->
+	RandRes = maps:find(rand, GsupMsgRx),
+	AutsRes = maps:find(auts, GsupMsgRx),
+	case {RandRes, AutsRes} of
+	{{ok, <<Rand:16/binary>>}, {ok, <<Auts:14/binary>>}} ->
+		% Authorization: SWx Diameter AVP SIP-Authorization for resynchronisation of the Simcard
+		EAP = #{authorization => <<Rand:16/binary, Auts:14/binary>>};
+	_ ->
+		EAP = #{}
+	end,
+	EAP.
+
 % Rx send auth info / requesting authentication tuples
 rx_gsup(Socket, GsupMsgRx = #{message_type := send_auth_info_req, imsi := Imsi}, State) ->
 	case maps:find(pdp_info_list, GsupMsgRx) of
@@ -281,11 +294,12 @@ rx_gsup(Socket, GsupMsgRx = #{message_type := send_auth_info_req, imsi := Imsi},
 		PdpTypeNr = ?GTP_PDP_ADDR_TYPE_NR_IPv4,
 		Apn = "*"
 	end,
+	EAP = parse_eap(GsupMsgRx),
 	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
 		undefined -> {ok, Pid} = epdg_ue_fsm:start(Imsi);
 		Pid -> Pid
 	end,
-	case epdg_ue_fsm:auth_request(Pid, {PdpTypeNr, Apn}) of
+	case epdg_ue_fsm:auth_request(Pid, {PdpTypeNr, Apn, EAP}) of
 	ok -> ok;
 	{error, Err} ->
 		lager:error("Auth Req for Imsi ~p failed: ~p~n", [Imsi, Err]),

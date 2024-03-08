@@ -81,10 +81,10 @@ stop(SrvRef) ->
                 {error, Err}
         end.
 
-auth_request(Pid, {PdpTypeNr, Apn}) ->
+auth_request(Pid, {PdpTypeNr, Apn, EAP}) ->
         lager:info("ue_fsm auth_request~n", []),
         try
-                gen_statem:call(Pid, {auth_request, PdpTypeNr, Apn})
+                gen_statem:call(Pid, {auth_request, PdpTypeNr, Apn, EAP})
         catch
         exit:Err ->
                 {error, Err}
@@ -176,8 +176,8 @@ received_gtpc_delete_bearer_request(Pid) ->
 %% Internal helpers
 %% ------------------------------------------------------------------
 
-ev_handle({call, From}, {auth_request, PdpTypeNr, Apn}, Data) ->
-        case epdg_diameter_swm:auth_request(Data#ue_fsm_data.imsi, PdpTypeNr, Apn) of
+ev_handle({call, From}, {auth_request, PdpTypeNr, Apn, EAP}, Data) ->
+        case epdg_diameter_swm:auth_request(Data#ue_fsm_data.imsi, PdpTypeNr, Apn, EAP) of
         ok -> {next_state, state_wait_auth_resp, Data, [{reply,From,ok}]};
         {error, Err} -> {stop_and_reply, Err, Data, [{reply,From,{error,Err}}]}
 	end.
@@ -205,8 +205,8 @@ terminate(Reason, State, Data) ->
 state_new(enter, _OldState, Data) ->
         {keep_state, Data};
 
-state_new({call, _From} = EvType, {auth_request, PdpTypeNr, Apn} = EvContent, Data) ->
-        lager:info("ue_fsm state_new event=auth_request {~p, ~p}, ~p~n", [PdpTypeNr, Apn, Data]),
+state_new({call, _From} = EvType, {auth_request, PdpTypeNr, Apn, EAP} = EvContent, Data) ->
+        lager:info("ue_fsm state_new event=auth_request {~p, ~p, ~p}, ~p~n", [PdpTypeNr, Apn, EAP, Data]),
         ev_handle(EvType, EvContent, Data);
 
 state_new({call, From}, purge_ms_request, Data) ->
@@ -233,8 +233,8 @@ state_wait_auth_resp({call, From}, {received_swm_auth_response, Result}, Data) -
 state_authenticating(enter, _OldState, Data) ->
         {keep_state, Data};
 
-state_authenticating({call, _From} = EvType, {auth_request, PdpTypeNr, Apn} = EvContent, Data) ->
-        lager:info("ue_fsm state_authenticating event=auth_request {~p, ~p}, ~p~n", [PdpTypeNr, Apn, Data]),
+state_authenticating({call, _From} = EvType, {auth_request, PdpTypeNr, Apn, EAP} = EvContent, Data) ->
+        lager:info("ue_fsm state_authenticating event=auth_request {~p, ~p, ~p}, ~p~n", [PdpTypeNr, Apn, EAP, Data]),
         ev_handle(EvType, EvContent, Data);
 
 state_authenticating({call, From}, lu_request, Data) ->
@@ -270,8 +270,8 @@ state_authenticating({call, From}, {received_swm_auth_compl_response, Result}, D
 state_authenticated(enter, _OldState, Data) ->
         {keep_state, Data};
 
-state_authenticated({call, _From}, {auth_request, PdpTypeNr, Apn}, Data) ->
-        lager:info("ue_fsm state_authenticated event=auth_request {~p, ~p}, ~p~n", [PdpTypeNr, Apn, Data]),
+state_authenticated({call, _From}, {auth_request, PdpTypeNr, Apn, EAP}, Data) ->
+        lager:info("ue_fsm state_authenticated event=auth_request {~p, ~p, ~p}, ~p~n", [PdpTypeNr, Apn, EAP, Data]),
         {next_state, state_new, Data, [postpone]};
 
 state_authenticated({call, From}, {tunnel_request, PCO}, Data) ->
@@ -338,8 +338,8 @@ state_wait_create_session_resp(state_timeout, create_session_timeout, Data) ->
 state_active(enter, _OldState, Data) ->
         {keep_state, Data};
 
-state_active({call, _From}, {auth_request, PdpTypeNr, Apn}, Data) ->
-        lager:info("ue_fsm state_active event=auth_request {~p, ~p}, ~p~n", [PdpTypeNr, Apn, Data]),
+state_active({call, _From}, {auth_request, PdpTypeNr, Apn, EAP}, Data) ->
+        lager:info("ue_fsm state_active event=auth_request {~p, ~p, ~p}, ~p~n", [PdpTypeNr, Apn, EAP, Data]),
         gtp_u_tun:delete_pdp_context(Data#ue_fsm_data.tun_pdp_ctx),
         Data1 = Data#ue_fsm_data{tun_pdp_ctx = undefined},
         {next_state, state_new, Data1, [postpone]};

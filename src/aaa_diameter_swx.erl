@@ -50,7 +50,7 @@
 %% gen_server Function Exports
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3]).
--export([multimedia_auth_request/7]).
+-export([multimedia_auth_request/6]).
 -export([server_assignment_request/4]).
 -export([test/0, test/1]).
 
@@ -140,11 +140,11 @@ test() ->
     test("001011234567890").
 
 test(IMSI) ->
-    multimedia_auth_request(IMSI, 3, "EAP-AKA", 1, [], [], 33).
+    multimedia_auth_request(IMSI, 1, 3, "EAP-AKA", 33, []).
 
-multimedia_auth_request(IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey, PdpTypeNr) ->
+multimedia_auth_request(IMSI, RAT, NumAuthItems, AuthScheme, PdpTypeNr, AuthorizationOpt) ->
     gen_server:call(?SERVER,
-                          {mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey, PdpTypeNr}}).
+                          {mar, {IMSI, RAT, NumAuthItems, AuthScheme, PdpTypeNr, AuthorizationOpt}}).
 % APN is optional and should be []
 server_assignment_request(IMSI, Type, APN, AgentInfoOpt) ->
     gen_server:call(?SERVER,
@@ -185,7 +185,7 @@ parse_saa(#'SAA'{'Experimental-Result' = [#{'Vendor-Code' := ?VENDOR_ID_3GPP, 'E
 parse_saa(Saa) ->
     {unknown_err, []}.
 
-handle_call({mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey, PdpTypeNr}}, {Pid, _Tag} = _From, State) ->
+handle_call({mar, {IMSI, RAT, NumAuthItems, AuthScheme, PdpTypeNr, AuthorizationOpt}}, {Pid, _Tag} = _From, State) ->
     SessionId = diameter:session_id(application:get_env(?ENV_APP_NAME, origin_host, ?ENV_DEFAULT_ORIG_HOST)),
     % RFC 4005 6.11.1 Framed-IP-Address AVP:
     % "0xFFFFFFFE indicates that the NAS should select an address for the user
@@ -217,8 +217,7 @@ handle_call({mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey, PdpT
                  'Auth-Session-State' = 1,
                  'SIP-Auth-Data-Item' = #'SIP-Auth-Data-Item'{
                     'SIP-Authentication-Scheme' = [AuthScheme],
-                    'Confidentiality-Key' = CKey,
-                    'Integrity-Key' = IntegrityKey,
+                    'SIP-Authorization' = AuthorizationOpt,
                     'Framed-IP-Address' = IPv4Opt,
                     'Framed-IPv6-Prefix' = IPv6Opt
                  },
