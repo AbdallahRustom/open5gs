@@ -161,3 +161,10 @@
     PGW_UPDATE                                  13
     RESTORATION                                 14
 
+;; 6.3.17
+@enum Reason-Code
+    PERMANENT_TERMINATION                   0
+    NEW_SERVER_ASSIGNED                     1
+    SERVER_CHANGE                           2
+    REMOVE_S-CSCF                           3
+
