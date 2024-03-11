@@ -49,6 +49,7 @@
 %% gen_server Function Exports
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, peer_down/3]).
 -export([code_change/3]).
+-export([tx_as_request/1]).
 -export([tx_aa_answer/2, tx_st_answer/2]).
 
 %% Diameter Application Definitions
@@ -68,6 +69,7 @@
 -define(ENV_DEFAULT_DIAMETER_CONNECT_TIMER_MS, 30000).
 -define(ENV_DEFAULT_DIAMETER_WATCHDOG_TIMER_MS, 30000).
 -define(ENV_DEFAULT_DIAMETER_WATCHDOG_CFG, [{okay, 3}, {suspect, 1}]).
+-define(ENV_DEFAULT_DIAMETER_TRANSMIT_TIMER_MS, 10000).
 
 -define(VENDOR_ID_3GPP, 10415).
 -define(VENDOR_ID_3GPP2, 5535).
@@ -93,6 +95,10 @@
            {module, ?CALLBACK_MOD},
            {answer_errors, callback}]}]).
 
+-record(s6b_state, {
+    tx_timeout :: non_neg_integer()
+}).
+
 %% @doc starts gen_server implementation process
 -spec start() -> ok | {error, term()}.
 start() ->
@@ -111,17 +117,18 @@ peer_down(_API, SvcName, {_PeerRef, _} = Peer) ->
     gen_server:cast(?SERVER, {peer_down, SvcName, Peer}),
     ok.
 
-init(State) ->
+init([]) ->
     Proto = application:get_env(?ENV_APP_NAME, dia_s6b_proto, ?ENV_DEFAULT_DIAMETER_PROTO),
     Ip = application:get_env(?ENV_APP_NAME, dia_s6b_local_ip, ?ENV_DEFAULT_DIAMETER_REMOTE_IP),
     Port = application:get_env(?ENV_APP_NAME, dia_s6b_local_port, ?ENV_DEFAULT_DIAMETER_REMOTE_PORT),
     ConnectTimer = application:get_env(?ENV_APP_NAME, dia_s6b_connect_timer, ?ENV_DEFAULT_DIAMETER_CONNECT_TIMER_MS),
     WatchdogTimer = application:get_env(?ENV_APP_NAME, dia_s6b_watchdog_timer, ?ENV_DEFAULT_DIAMETER_WATCHDOG_TIMER_MS),
     WatchdogConfig = application:get_env(?ENV_APP_NAME, diameter_watchdog_config, ?ENV_DEFAULT_DIAMETER_WATCHDOG_CFG),
+    TxTimer = application:get_env(?ENV_APP_NAME, dia_s6b_transmit_timer, ?ENV_DEFAULT_DIAMETER_TRANSMIT_TIMER_MS),
     ok = diameter:start_service(?MODULE, ?SERVICE),
     % lager:info("DiaServices is ~p~n", [DiaServ]),
     {ok, _} = listen({address, Proto, Ip, Port}, {timer, ConnectTimer, WatchdogTimer, WatchdogConfig}),
-    {ok, State}.
+    {ok, #s6b_state{tx_timeout = TxTimer}}.
 
 tx_aa_answer(Pid, DiaRC) ->
     % handle_request(AAR) was spawned into its own process, and it's blocked waiting for AAA:
@@ -130,6 +137,27 @@ tx_aa_answer(Pid, DiaRC) ->
 tx_st_answer(Pid, DiaRC) ->
     % handle_request(STR) was spawned into its own process, and it's blocked waiting for STA:
     Pid ! {sta, DiaRC}.
+
+tx_as_request(NAI) ->
+    gen_server:call(?SERVER, {asr, NAI}).
+
+handle_call({asr, NAI}, _From, State) ->
+    lager:debug("S6b Tx ASR NAI=~p~n", [NAI]),
+    SessionId = diameter:session_id(application:get_env(?ENV_APP_NAME, dia_s6b_origin_host, ?ENV_DEFAULT_ORIG_HOST)),
+    ASR = #'ASR'{'Session-Id' = SessionId,
+                 'Auth-Application-Id' = ?DIAMETER_APP_ID_S6b,
+                 'User-Name' = [NAI],
+                 'Auth-Session-State' = [?'AUTH-SESSION-STATE_NO_STATE_MAINTAINED']
+                },
+    lager:debug("S6b Tx ASR: ~p~n", [ASR]),
+    Ret = diameter_call(ASR, State),
+    case Ret of
+        ok ->
+            {reply, ok, State};
+        {error, Err} ->
+            lager:error("Error: ~w~n", [Err]),
+            {reply, {error, Err}, State}
+    end;
 
 handle_call(Info, _From, State) ->
     error_logger:error_report(["unknown handle_call", {module, ?MODULE}, {info, Info}, {state, State}]).
@@ -189,4 +217,7 @@ tmod(tcp) ->
 tmod(sctp) ->
     diameter_sctp.
 
+diameter_call(Msg, State) ->
+    diameter:call(?SVC_NAME, ?APP_ALIAS, Msg, [{timeout, State#s6b_state.tx_timeout},
+                                                detach]).
 

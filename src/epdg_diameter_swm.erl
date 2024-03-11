@@ -19,8 +19,10 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3, terminate/2]).
 
--export([auth_request/4, auth_compl_request/2, session_termination_request/1]).
--export([auth_response/2, auth_compl_response/2, session_termination_answer/2]).
+-export([auth_request/4, auth_compl_request/2,
+	 session_termination_request/1, abort_session_answer/1]).
+-export([auth_response/2, auth_compl_response/2,
+	 session_termination_answer/2, abort_session_request/1]).
 
 -define(SERVER, ?MODULE).
 
@@ -72,6 +74,17 @@ session_termination_request(Imsi) ->
 		_ -> Result
 	end.
 
+% 3GPP TS 29.273 7.1.2.4
+abort_session_answer(Imsi) ->
+	% In Diameter we use Imsi as strings, as done by diameter module.
+	ImsiStr = binary_to_list(Imsi),
+	Result = gen_server:call(?SERVER, {asa, ImsiStr}),
+	case Result of
+		{ok, _Mar} ->
+			ok;
+		_ -> Result
+	end.
+
 handle_call({epdg_auth_req, Imsi, PdpTypeNr, Apn, EAP}, {Pid, _Tag} = _From, State0) ->
 	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
 	{_Sess, State1} = find_or_new_swm_session(Imsi, Pid, State0),
@@ -95,6 +108,17 @@ handle_call({str, Imsi}, _From, State) ->
 	case Sess of
 	#swm_session{imsi = Imsi} ->
 		Reply = aaa_diameter_swm:session_termination_request(Imsi);
+	undefined ->
+		Reply = {error,unknown_imsi}
+	end,
+	{reply, Reply, State};
+
+handle_call({asa, Imsi}, _From, State) ->
+	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
+	Sess = find_swm_session_by_imsi(Imsi, State),
+	case Sess of
+	#swm_session{imsi = Imsi} ->
+		Reply = aaa_diameter_swm:abort_session_answer(Imsi);
 	undefined ->
 		Reply = {error,unknown_imsi}
 	end,
@@ -130,6 +154,16 @@ handle_cast({sta, Imsi, Result}, State) ->
 	end,
 	{noreply, State};
 
+handle_cast({asr, Imsi}, State) ->
+	Sess = find_swm_session_by_imsi(Imsi, State),
+	case Sess of
+	#swm_session{imsi = Imsi} ->
+		epdg_ue_fsm:received_swm_abort_session_request(Sess#swm_session.pid);
+	undefined ->
+		error_logger:error_report(["unknown swm_session", {module, ?MODULE}, {imsi, Imsi}, {state, State}])
+	end,
+	{noreply, State};
+
 handle_cast(Info, S) ->
 	error_logger:error_report(["unknown handle_cast", {module, ?MODULE}, {info, Info}, {state, S}]),
 	{noreply, S}.
@@ -159,6 +193,10 @@ auth_compl_response(Imsi, Result) ->
 % Rx SWm Diameter STA:
 session_termination_answer(Imsi, Result) ->
 	ok = gen_server:cast(?SERVER, {sta, Imsi, Result}).
+
+% Rx SWm Diameter ASR:
+abort_session_request(Imsi) ->
+	ok = gen_server:cast(?SERVER, {asr, Imsi}).
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions

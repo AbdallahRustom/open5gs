@@ -40,7 +40,7 @@
 
 -export([ip_to_bin/1, bin_to_ip/1]).
 -export([cause_gtp2gsup/1]).
--export([dia_rc_to_gsup_cause/1]).
+-export([dia_rc_success/1, dia_rc_to_gsup_cause/1]).
 -export([gtp2_paa_to_epdg_eua/1, epdg_eua_to_gsup_pdp_address/1]).
 -export([nai_to_imsi/1]).
 
@@ -91,6 +91,10 @@ cause_gtp2gsup(_) -> ?GSUP_CAUSE_PROTO_ERR_UNSPEC.
 -define(DIAMETER_ERROR_RAT_NOT_ALLOWED,			5421).
 -define(DIAMETER_ERROR_EQUIPMENT_UNKNOWN,		5422).
 -define(DIAMETER_ERROR_UNKOWN_SERVING_NODE,		5423).
+
+dia_rc_success(#epdg_dia_rc{result_code = 2001}) -> ok;
+dia_rc_success(#epdg_dia_rc{result_code = 2002}) -> ok;
+dia_rc_success(_) -> invalid_result_code.
 
 -spec dia_rc_to_gsup_cause(#epdg_dia_rc{}) -> non_neg_integer().
 dia_rc_to_gsup_cause(#epdg_dia_rc{result_code = 2001}) -> 0;

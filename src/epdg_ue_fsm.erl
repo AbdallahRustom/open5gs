@@ -42,14 +42,25 @@
 -export([start/1, stop/1]).
 -export([init/1,callback_mode/0,terminate/3]).
 -export([get_server_name_by_imsi/1, get_pid_by_imsi/1]).
--export([auth_request/2, lu_request/1, tunnel_request/2, purge_ms_request/1]).
--export([received_swm_auth_response/2, received_swm_auth_compl_response/2, received_swm_session_termination_answer/2]).
+-export([auth_request/2, lu_request/1, tunnel_request/2, purge_ms_request/1,
+         cancel_location_result/1]).
+-export([received_swm_auth_response/2, received_swm_auth_compl_response/2,
+         received_swm_session_termination_answer/2, received_swm_abort_session_request/1]).
 -export([received_gtpc_create_session_response/2, received_gtpc_delete_session_response/2, received_gtpc_delete_bearer_request/1]).
--export([state_new/3, state_wait_auth_resp/3, state_authenticating/3, state_authenticated/3,
-         state_wait_create_session_resp/3, state_wait_delete_session_resp/3,
-         state_wait_swm_session_termination_answer/3, state_active/3]).
+-export([state_new/3,
+         state_wait_auth_resp/3,
+         state_authenticating/3,
+         state_authenticated/3,
+         state_wait_create_session_resp/3,
+         state_active/3,
+         state_wait_swm_session_termination_answer/3,
+         state_wait_delete_session_resp/3,
+         state_dereg_pgw_initiated_wait_cancel_location_res/3,
+         state_dereg_net_initiated_wait_cancel_location_res/3,
+         state_dereg_net_initiated_wait_s2b_delete_session_resp/3]).
 
 -define(TIMEOUT_VAL_WAIT_GTP_ANSWER, 10000).
+-define(TIMEOUT_VAL_WAIT_GSUP_ANSWER, 10000).
 
 -record(ue_fsm_data, {
         imsi,
@@ -117,6 +128,15 @@ purge_ms_request(Pid) ->
                 {error, Err}
         end.
 
+cancel_location_result(Pid) ->
+        lager:info("ue_fsm cancel_location_result~n", []),
+        try
+                gen_statem:call(Pid, cancel_location_result)
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
+
 received_swm_auth_response(Pid, Result) ->
         lager:info("ue_fsm received_swm_auth_response ~p~n", [Result]),
         try
@@ -139,6 +159,15 @@ received_swm_session_termination_answer(Pid, Result) ->
         lager:info("ue_fsm received_swm_session_termination_answer ~p~n", [Result]),
         try
         gen_statem:call(Pid, {received_swm_sta, Result})
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
+
+received_swm_abort_session_request(Pid) ->
+        lager:info("ue_fsm received_swm_abort_session_request~n", []),
+        try
+        gen_statem:call(Pid, received_swm_asr)
         catch
         exit:Err ->
                 {error, Err}
@@ -202,6 +231,10 @@ terminate(Reason, State, Data) ->
         end,
         ok.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% state_new:
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 state_new(enter, _OldState, Data) ->
         {keep_state, Data};
 
@@ -212,6 +245,10 @@ state_new({call, _From} = EvType, {auth_request, PdpTypeNr, Apn, EAP} = EvConten
 state_new({call, From}, purge_ms_request, Data) ->
         lager:info("ue_fsm state_new event=purge_ms_request, ~p~n", [Data]),
         {stop_and_reply, purge_ms_request, [{reply,From,ok}], Data}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% state_wait_auth_resp:
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 state_wait_auth_resp(enter, _OldState, Data) ->
         {keep_state, Data};
@@ -229,6 +266,10 @@ state_wait_auth_resp({call, From}, {received_swm_auth_response, Result}, Data) -
                 _ ->
                         {next_state, state_new, Data, [{reply,From,{error,unknown}}]}
         end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% state_authenticating:
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 state_authenticating(enter, _OldState, Data) ->
         {keep_state, Data};
@@ -267,6 +308,10 @@ state_authenticating({call, From}, {received_swm_auth_compl_response, Result}, D
                 {next_state, state_new, Data, [{reply,From,ok}]}
         end.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% state_authenticated:
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 state_authenticated(enter, _OldState, Data) ->
         {keep_state, Data};
 
@@ -289,9 +334,8 @@ state_authenticated({call, From}, purge_ms_request, Data) ->
 
 state_authenticated({call, From}, received_gtpc_delete_bearer_request, Data) ->
         lager:info("ue_fsm state_authenticated event=received_gtpc_delete_bearer_request, ~p~n", [Data]),
-        gsup_server:cancel_location_request(Data#ue_fsm_data.imsi),
         Data1 = Data#ue_fsm_data{tear_down_gsup_needed = false},
-        {next_state, state_wait_swm_session_termination_answer, Data1, [{reply,From,ok}]};
+        {next_state, state_dereg_pgw_initiated_wait_cancel_location_res, Data1, [{reply,From,ok}]};
 
 state_authenticated({call, From}, Event, Data) ->
         lager:error("ue_fsm state_authenticated: Unexpected call event ~p, ~p~n", [Event, Data]),
@@ -300,6 +344,10 @@ state_authenticated({call, From}, Event, Data) ->
 state_authenticated(cast, Event, Data) ->
         lager:error("ue_fsm state_authenticated: Unexpected cast event ~p, ~p~n", [Event, Data]),
         {keep_state, Data}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% state_wait_create_session_resp:
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 state_wait_create_session_resp(enter, _OldState, Data) ->
         {keep_state, Data, [{state_timeout,?TIMEOUT_VAL_WAIT_GTP_ANSWER,create_session_timeout}]};
@@ -335,6 +383,10 @@ state_wait_create_session_resp(state_timeout, create_session_timeout, Data) ->
         gsup_server:tunnel_response(Data#ue_fsm_data.imsi, {error, ?GSUP_CAUSE_CONGESTION}),
         {next_state, state_authenticated, Data}.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% state_active:
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 state_active(enter, _OldState, Data) ->
         {keep_state, Data};
 
@@ -356,9 +408,15 @@ state_active({call, From}, purge_ms_request, Data) ->
 state_active({call, From}, received_gtpc_delete_bearer_request, Data) ->
         lager:info("ue_fsm state_active event=received_gtpc_delete_bearer_request, ~p~n", [Data]),
         gtp_u_tun:delete_pdp_context(Data#ue_fsm_data.tun_pdp_ctx),
-        gsup_server:cancel_location_request(Data#ue_fsm_data.imsi),
         Data1 = Data#ue_fsm_data{tun_pdp_ctx = undefined, tear_down_gsup_needed = false},
-        {next_state, state_wait_swm_session_termination_answer, Data1, [{reply,From,ok}]};
+        {next_state, state_dereg_pgw_initiated_wait_cancel_location_res, Data1, [{reply,From,ok}]};
+
+%%% network (HSS/AAA) initiated de-registation requested:
+state_active({call, From}, received_swm_asr, Data) ->
+        lager:info("ue_fsm state_active event=received_swm_asr, ~p~n", [Data]),
+        gtp_u_tun:delete_pdp_context(Data#ue_fsm_data.tun_pdp_ctx),
+        Data1 = Data#ue_fsm_data{tun_pdp_ctx = undefined, tear_down_gsup_needed = false},
+        {next_state, state_dereg_net_initiated_wait_cancel_location_res, Data1, [{reply,From,ok}]};
 
 state_active({call, From}, Event, Data) ->
         lager:error("ue_fsm state_active: Unexpected call event ~p, ~p~n", [Event, Data]),
@@ -367,6 +425,10 @@ state_active({call, From}, Event, Data) ->
 state_active(cast, Event, Data) ->
         lager:error("ue_fsm state_active: Unexpected cast event ~p, ~p~n", [Event, Data]),
         {keep_state, Data}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% state_wait_delete_session_resp:
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 state_wait_delete_session_resp(enter, _OldState, Data) ->
         {keep_state, Data};
@@ -387,6 +449,36 @@ state_wait_delete_session_resp({call, From}, {received_gtpc_delete_session_respo
 state_wait_delete_session_resp({call, From}, Event, Data) ->
         lager:error("ue_fsm state_wait_delete_session_resp: Unexpected call event ~p, ~p~n", [Event, Data]),
         {keep_state, Data, [{reply,From,{error,unexpected_event}}]}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% state_dereg_pgw_initiated_wait_cancel_location_res:
+%% Network (PGW) initiated de-registration: We trigger GSUP Cancel Location Req.
+%% Wait for GSUP Cancel Location Result.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+state_dereg_pgw_initiated_wait_cancel_location_res(enter, _OldState, Data) ->
+        case gsup_server:cancel_location_request(Data#ue_fsm_data.imsi) of
+        ok ->
+                {keep_state, Data, {state_timeout,?TIMEOUT_VAL_WAIT_GSUP_ANSWER,gsup_cancel_location_timeout}};
+        {error, _Err} ->
+                {next_state, state_wait_swm_session_termination_answer, Data}
+        end;
+
+state_dereg_pgw_initiated_wait_cancel_location_res({call, From}, cancel_location_result, Data) ->
+        lager:info("ue_fsm state_dereg_pgw_initiated_wait_cancel_location_res event=cancel_location_result, ~p~n", [Data]),
+        {next_state, state_wait_swm_session_termination_answer, Data, [{reply,From,ok}]};
+
+state_dereg_pgw_initiated_wait_cancel_location_res({call, From}, Event, Data) ->
+        lager:error("ue_fsm state_dereg_pgw_initiated_wait_cancel_location_res: Unexpected call event ~p, ~p~n", [Event, Data]),
+        {keep_state, Data, [{reply,From,ok}]};
+
+
+state_dereg_pgw_initiated_wait_cancel_location_res(state_timeout, gsup_cancel_location_timeout, Data) ->
+        lager:error("ue_fsm state_dereg_pgw_initiated_wait_cancel_location_res: Timeout ~p, ~p~n", [s2b_delete_session_timeout, Data]),
+        {next_state, state_wait_swm_session_termination_answer, Data}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% state_wait_swm_session_termination_answer:
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 state_wait_swm_session_termination_answer(enter, _OldState, Data) ->
         % Send STR towards AAA-Server
@@ -416,5 +508,64 @@ state_wait_swm_session_termination_answer({call, From}, {received_swm_sta, DiaRC
         {stop_and_reply, normal, [{reply,From,ok}], Data};
 
 state_wait_swm_session_termination_answer({call, From}, Event, Data) ->
-        lager:error("ue_fsm state_wait_delete_session_resp: Unexpected call event ~p, ~p~n", [Event, Data]),
+        lager:error("ue_fsm state_wait_swm_session_termination_answer: Unexpected call event ~p, ~p~n", [Event, Data]),
         {keep_state, Data, [{reply,From,{error,unexpected_event}}]}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% state_dereg_net_initiated_wait_cancel_location_res:
+%% Network (AAA/HSS) initiated de-registration: We trigger GSUP Cancel Location Req.
+%% Wait for GSUP Cancel Location Result, then continue to tear down S2b session.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+state_dereg_net_initiated_wait_cancel_location_res(enter, _OldState, Data) ->
+        case gsup_server:cancel_location_request(Data#ue_fsm_data.imsi, ?GSUP_CANCELLATION_TYPE_WITHDRAW) of
+        ok ->
+                {keep_state, Data, {state_timeout,?TIMEOUT_VAL_WAIT_GSUP_ANSWER,gsup_cancel_location_timeout}};
+        {error, _Err} ->
+                {next_state, state_dereg_net_initiated_wait_s2b_delete_session_resp, Data}
+        end;
+
+state_dereg_net_initiated_wait_cancel_location_res({call, From}, cancel_location_result, Data) ->
+        lager:info("ue_fsm state_dereg_net_initiated_wait_cancel_location_res event=cancel_location_result, ~p~n", [Data]),
+        {next_state, state_dereg_net_initiated_wait_s2b_delete_session_resp, Data, [{reply,From,ok}]};
+
+state_dereg_net_initiated_wait_cancel_location_res({call, From}, Event, Data) ->
+        lager:error("ue_fsm state_dereg_net_initiated_wait_cancel_location_res: Unexpected call event ~p, ~p~n", [Event, Data]),
+        {keep_state, Data, [{reply,From,ok}]};
+
+
+state_dereg_net_initiated_wait_cancel_location_res(state_timeout, gsup_cancel_location_timeout, Data) ->
+        lager:error("ue_fsm state_dereg_net_initiated_wait_cancel_location_res: Timeout ~p, ~p~n", [s2b_delete_session_timeout, Data]),
+        {next_state, state_dereg_net_initiated_wait_s2b_delete_session_resp, Data}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% state_dereg_net_initiated_wait_s2b_delete_session_resp:
+%% Network (AAA/HSS) initiated de-registration: We have informed UE (GSUP), and
+%% have triggered GTPCv1 Delete Session Req against PGW.
+%% Wait for GTPCv1 Delete Session Response, ssend SWm ASA to AAAA and terminate FSM.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+state_dereg_net_initiated_wait_s2b_delete_session_resp(enter, _OldState, Data) ->
+        case epdg_gtpc_s2b:delete_session_req(Data#ue_fsm_data.imsi) of
+        ok ->
+                {keep_state, Data, {state_timeout,?TIMEOUT_VAL_WAIT_GTP_ANSWER,s2b_delete_session_timeout}};
+        {error, Err} ->
+                epdg_diameter_swm:abort_session_answer(Data#ue_fsm_data.imsi),
+                {stop, {error,Err}}
+        end;
+
+state_dereg_net_initiated_wait_s2b_delete_session_resp({call, From}, {received_gtpc_delete_session_response, _Resp = #gtp{version = v2, type = delete_session_response, ie = IEs}}, Data) ->
+        lager:info("ue_fsm state_dereg_net_initiated_wait_s2b_delete_session_resp event=received_gtpc_delete_session_response, ~p~n", [Data]),
+        #{{v2_cause,0} := CauseIE} = IEs,
+        GtpCause = gtp_utils:enum_v2_cause(CauseIE#v2_cause.v2_cause),
+        lager:debug("Cause: GTP_atom=~p -> GTP_int=~p~n", [CauseIE#v2_cause.v2_cause, GtpCause]),
+        epdg_diameter_swm:abort_session_answer(Data#ue_fsm_data.imsi),
+        {stop_and_reply, normal, [{reply,From,ok}], Data};
+
+state_dereg_net_initiated_wait_s2b_delete_session_resp({call, From}, Event, Data) ->
+        lager:error("ue_fsm state_dereg_net_initiated_wait_s2b_delete_session_resp: Unexpected call event ~p, ~p~n", [Event, Data]),
+        {keep_state, Data, [{reply,From,ok}]};
+
+
+state_dereg_net_initiated_wait_s2b_delete_session_resp(state_timeout, s2b_delete_session_timeout, Data) ->
+        lager:error("ue_fsm state_dereg_net_initiated_wait_s2b_delete_session_resp: Timeout ~p, ~p~n", [s2b_delete_session_timeout, Data]),
+        epdg_diameter_swm:abort_session_answer(Data#ue_fsm_data.imsi),
+        {stop, normal}.

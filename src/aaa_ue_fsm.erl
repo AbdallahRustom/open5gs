@@ -42,12 +42,23 @@
 -export([start/1, stop/1]).
 -export([init/1,callback_mode/0,terminate/3]).
 -export([get_server_name_by_imsi/1, get_pid_by_imsi/1]).
--export([ev_swm_auth_req/2, ev_swm_auth_compl/2, ev_rx_swm_str/1, ev_rx_swx_maa/2, ev_rx_swx_saa/2,
-         ev_rx_s6b_aar/2, ev_rx_s6b_str/1]).
--export([state_new/3, state_wait_swx_maa/3, state_wait_swx_saa/3, state_authenticated/3, state_authenticated_wait_swx_saa/3]).
+-export([ev_swm_auth_req/2, ev_swm_auth_compl/2, ev_rx_swm_str/1, ev_rx_swm_asa/1,
+         ev_rx_swx_maa/2, ev_rx_swx_saa/2, ev_rx_swx_rtr/1,
+         ev_rx_s6b_aar/2, ev_rx_s6b_str/1, ev_rx_s6b_asa/2]).
+-export([state_new/3,
+         state_wait_swx_maa/3,
+         state_wait_swx_saa/3,
+         state_authenticated/3,
+         state_authenticated_wait_swx_saa/3,
+         state_dereg_net_initiated_wait_s6b_asa/3,
+         state_dereg_net_initiated_wait_swm_asa/3]).
+
+-define(TIMEOUT_VAL_WAIT_S6b_ANSWER, 10000).
+-define(TIMEOUT_VAL_WAIT_SWm_ANSWER, 10000).
 
 -record(ue_fsm_data, {
-        imsi             = unknown :: string(),
+        imsi                       :: string(),
+        nai                        :: string(),
         apn                        :: string(),
         epdg_sess_active = false   :: boolean(),
         pgw_sess_active  = false   :: boolean(),
@@ -102,6 +113,15 @@ ev_rx_swm_str(Pid) ->
                 {error, Err}
         end.
 
+ev_rx_swm_asa(Pid) ->
+        lager:info("ue_fsm ev_rx_swm_asa~n", []),
+        try
+                gen_statem:call(Pid, rx_swm_asa)
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
+
 ev_rx_swx_maa(Pid, Result) ->
         lager:info("ue_fsm ev_rx_swx_maa~n", []),
         try
@@ -120,10 +140,28 @@ ev_rx_swx_saa(Pid, Result) ->
                 {error, Err}
         end.
 
-ev_rx_s6b_aar(Pid, {Apn, AgentInfoOpt}) ->
-        lager:info("ue_fsm ev_rx_s6b_aar: ~p ~p~n", [Apn, AgentInfoOpt]),
+ev_rx_swx_rtr(Pid) ->
+        lager:info("ue_fsm ev_rx_swx_rtr~n", []),
         try
-                gen_statem:call(Pid, {rx_s6b_aar, Apn, AgentInfoOpt})
+                gen_statem:call(Pid, rx_swx_rtr)
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
+
+ev_rx_s6b_aar(Pid, {NAI, Apn, AgentInfoOpt}) ->
+        lager:info("ue_fsm ev_rx_s6b_aar: ~p ~p ~p~n", [NAI, Apn, AgentInfoOpt]),
+        try
+                gen_statem:call(Pid, {rx_s6b_aar, NAI, Apn, AgentInfoOpt})
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
+
+ev_rx_s6b_asa(Pid, Result) ->
+        lager:info("ue_fsm ev_rx_s6b_asa: ~p~n", [Result]),
+        try
+                gen_statem:call(Pid, {rx_s6b_asa, Result})
         catch
         exit:Err ->
                 {error, Err}
@@ -206,12 +244,12 @@ state_authenticated(enter, _OldState, Data) ->
         Data1 = Data#ue_fsm_data{epdg_sess_active = true},
         {keep_state, Data1};
 
-state_authenticated({call, {Pid, _Tag} = From}, {rx_s6b_aar, Apn, AgentInfoOpt}, Data) ->
-        lager:info("ue_fsm state_authenticated event=rx_s6b_aar Apn=~p AgentInfo=~p, ~p~n", [Apn, AgentInfoOpt, Data]),
+state_authenticated({call, {Pid, _Tag} = From}, {rx_s6b_aar, NAI, Apn, AgentInfoOpt}, Data) ->
+        lager:info("ue_fsm state_authenticated event=rx_s6b_aar NAI=~p Apn=~p AgentInfo=~p, ~p~n", [NAI, Apn, AgentInfoOpt, Data]),
         case aaa_diameter_swx:server_assignment_request(Data#ue_fsm_data.imsi,
                                                         ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_PGW_UPDATE',
                                                         Apn, AgentInfoOpt) of
-        ok ->   Data1 = Data#ue_fsm_data{s6b_resp_pid = Pid, apn = Apn},
+        ok ->   Data1 = Data#ue_fsm_data{s6b_resp_pid = Pid, nai = NAI, apn = Apn},
                 {next_state, state_authenticated_wait_swx_saa, Data1, [{reply,From,ok}]};
         {error, Err} -> {keep_state, Data, [{reply,From,{error, Err}}]}
         end;
@@ -223,7 +261,7 @@ state_authenticated({call, From}, rx_swm_str, Data) ->
                 DiaRC = 5002, %% UNKNOWN_SESSION_ID
                 {keep_state, Data, [{reply,From,{error, DiaRC}}]};
         {true, true} -> %% The other session is still active, no need to send SAR Type=USER_DEREGISTRATION
-                lager:info("ue_fsm state_authenticated event=rx_swn_str: PGW session still active, skip updating the HSS~n", []),
+                lager:info("ue_fsm state_authenticated event=rx_swm_str: PGW session still active, skip updating the HSS~n", []),
                 Data1 = Data#ue_fsm_data{epdg_sess_active = false},
                 {keep_state, Data1, [{reply,From,{ok, 2001}}]};
         {true, false} -> %% All sessions will now be gone, trigger SAR Type=USER_DEREGISTRATION
@@ -264,6 +302,13 @@ state_authenticated({call, _From}, {swm_auth_req, PdpTypeNr, Apn, EAP}, Data) ->
         lager:info("ue_fsm state_authenticated event=swm_auth_req {~p, ~p, ~p}, ~p~n", [PdpTypeNr, Apn, EAP, Data]),
         {next_state, state_new, Data, [postpone]};
 
+state_authenticated({call, From}, rx_swx_rtr, Data) ->
+        lager:info("ue_fsm state_authenticated event=rx_swx_rtr ~p~n", [Data]),
+        case {Data#ue_fsm_data.pgw_sess_active, Data#ue_fsm_data.epdg_sess_active} of
+        {true, _} -> {next_state, state_dereg_net_initiated_wait_s6b_asa, Data, [{reply,From,ok}]};
+        {false, _} -> {next_state, state_dereg_net_initiated_wait_s6b_asa, Data, [{reply,From,ok}]} %% TODO: proper state for s6b
+        end;
+
 state_authenticated({call, From}, Ev, Data) ->
         lager:info("ue_fsm state_authenticated: Unexpected call event ~p, ~p~n", [Ev, Data]),
         {keep_state, Data, [{reply,From,ok}]}.
@@ -294,3 +339,35 @@ state_authenticated_wait_swx_saa({call, From}, {rx_swx_saa, Result}, Data) ->
                         {next_state, state_new, Data1, [{reply,From,ok}]}
                 end
         end.
+
+%% HSS asked us to do deregistration towards the user.
+%% Transmit S6b ASR towards PGW and wait for ASA back.
+state_dereg_net_initiated_wait_s6b_asa(enter, _OldState, Data) ->
+        aaa_diameter_s6b:tx_as_request(Data#ue_fsm_data.nai),
+        {keep_state, Data, {state_timeout,?TIMEOUT_VAL_WAIT_S6b_ANSWER,s6b_asa_timeout}};
+
+state_dereg_net_initiated_wait_s6b_asa({call, From}, {rx_s6b_asa, _Result}, Data) ->
+        {next_state, state_dereg_net_initiated_wait_swm_asa, Data, [{reply,From,ok}]};
+
+state_dereg_net_initiated_wait_s6b_asa({call, From}, Ev, Data) ->
+        lager:notice("ue_fsm state_dereg_net_initiated_wait_s6b_asa: Unexpected call event ~p, ~p~n", [Ev, Data]),
+        {keep_state, Data, [{reply,From,ok}]};
+
+state_dereg_net_initiated_wait_s6b_asa(state_timeout, s6b_asa_timeout, Data) ->
+        {next_state, state_dereg_net_initiated_wait_swm_asa, Data}.
+
+%% HSS asked us to do deregistration towards the user.
+%% S6b (PGW) was already torn down. Now transmit SWm ASR towards ePDG and wait for ASA back.
+state_dereg_net_initiated_wait_swm_asa(enter, _OldState, Data) ->
+        aaa_diameter_swm:tx_as_request(Data#ue_fsm_data.imsi),
+        {keep_state, Data, {state_timeout,?TIMEOUT_VAL_WAIT_SWm_ANSWER,swm_asa_timeout}};
+
+state_dereg_net_initiated_wait_swm_asa({call, From}, rx_swm_asa, Data) ->
+        {stop_and_reply, normal, [{reply,From,ok}], Data};
+
+state_dereg_net_initiated_wait_swm_asa({call, From}, Ev, Data) ->
+        lager:notice("ue_fsm state_dereg_net_initiated_wait_swm_asa: Unexpected call event ~p, ~p~n", [Ev, Data]),
+        {keep_state, Data, [{reply,From,ok}]};
+
+state_dereg_net_initiated_wait_swm_asa(state_timeout, swm_asa_timeout, _Data) ->
+        {stop, normal}.

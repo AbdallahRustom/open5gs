@@ -29,22 +29,30 @@ pick_peer([Peer | _], _, _SvcName, _State) ->
     {ok, Peer}.
 
 %% prepare_request/3
-prepare_request(_Req, _SvcName, _Peer) ->
-    lager:error("Unexpected prepare_request(): ~p~n", [_Req]),
-    ?UNEXPECTED.
+prepare_request(#diameter_packet{msg = [ T | Avps ]}, _, {_, Caps})
+  when is_list(Avps) ->
+    #diameter_caps{origin_host = {OH, DH}, origin_realm = {OR, DR}} = Caps,
+    {send,
+     [T,
+      {'Origin-Host', OH},
+      {'Origin-Realm', OR},
+      {'Destination-Host', [DH]},
+      {'Destination-Realm', DR}
+      | Avps]};
+% TODO: is there a simple way to capture all the following requests?
+prepare_request(#diameter_packet{msg = Req}, _, {_, Caps})
+		when is_record(Req, 'ASR') ->
+    #diameter_caps{origin_host = {OH, DH}, origin_realm = {OR, DR}} = Caps,
+	Msg = Req#'ASR'{'Origin-Host' = OH,
+                    'Origin-Realm' = OR,
+                    'Destination-Realm' = DR,
+                    'Destination-Host' = DH},
+    lager:debug("S6b prepare_request: ~p~n", [Msg]),
+	{send, Msg}.
 
 %% prepare_retransmit/3
 prepare_retransmit(Packet, SvcName, Peer) ->
     prepare_request(Packet, SvcName, Peer).
-
-%% handle_answer/4
-
-%% Since client.erl has detached the call when using the list
-%% encoding and not otherwise, output to the terminal in the
-%% the former case, return in the latter.
-
-handle_answer(_Packet, _Request, _SvcName, _Peer) ->
-    ?UNEXPECTED.
 
 %% handle_error/4
 handle_error(Reason, Request, _SvcName, _Peer) when is_list(Request) ->
@@ -59,14 +67,14 @@ handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) wh
 	#'AAR'{'Session-Id' = SessionId,
            'Auth-Application-Id' = AuthAppId,
            'Auth-Request-Type' = AuthReqType,
-           'User-Name' = [UserName],
+           'User-Name' = [NAI],
            'Service-Selection' = [Apn],
            'MIP6-Agent-Info' = AgentInfoOpt } = Req,
-    Imsi = conv:nai_to_imsi(UserName),
+    Imsi = conv:nai_to_imsi(NAI),
     PidRes = aaa_ue_fsm:get_pid_by_imsi(Imsi),
     case PidRes of
     PidRes when is_pid(PidRes) ->
-        ok = aaa_ue_fsm:ev_rx_s6b_aar(PidRes, {Apn, AgentInfoOpt}),
+        ok = aaa_ue_fsm:ev_rx_s6b_aar(PidRes, {NAI, Apn, AgentInfoOpt}),
         lager:debug("Waiting for S6b AAA~n", []),
         receive
             {aaa, DiaRC} -> lager:debug("Rx AAA with DiaRC=~p~n", [DiaRC])
@@ -124,3 +132,24 @@ handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) wh
 handle_request(Packet, _SvcName, Peer) ->
     lager:error("S6b Rx unexpected msg from ~p: ~p~n", [Peer, Packet]),
     erlang:error({unexpected, ?MODULE, ?LINE}).
+
+%% handle_answer/4
+handle_answer(#diameter_packet{msg = Msg, errors = Errors}, Request, _SvcName, Peer) when is_record(Msg, 'ASA')  ->
+    lager:info("S6b Rx ASA ~p: ~p/ Errors ~p ~n", [Peer, Msg, Errors]),
+    % Obtain Imsi from originating Request:
+    #'ASR'{'User-Name' = [NAI]} = Request,
+    Imsi = conv:nai_to_imsi(NAI),
+    PidRes = aaa_ue_fsm:get_pid_by_imsi(Imsi),
+    #'ASA'{'Result-Code' = ResultCode} = Msg,
+    DiaRC = #epdg_dia_rc{result_code = ResultCode},
+    case conv:dia_rc_success(DiaRC) of
+    ok ->
+        aaa_ue_fsm:ev_rx_s6b_asa(PidRes, ok);
+    _ ->
+        aaa_ue_fsm:ev_rx_s6b_asa(PidRes, {error, DiaRC})
+    end,
+    {ok, Msg};
+
+handle_answer(#diameter_packet{msg = Msg, errors = []}, _Request, _SvcName, Peer) ->
+    lager:notice("S6b Rx unexpected ~p: ~p~n", [Peer, Msg]),
+    {ok, Msg}.

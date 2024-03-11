@@ -14,8 +14,8 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3, terminate/2]).
 
--export([auth_request/4, auth_compl_request/2, session_termination_request/1]).
--export([auth_response/2, auth_compl_response/2, session_termination_answer/2]).
+-export([auth_request/4, auth_compl_request/2, session_termination_request/1, abort_session_answer/1]).
+-export([auth_response/2, auth_compl_response/2, session_termination_answer/2, tx_as_request/1]).
 
 -define(SERVER, ?MODULE).
 
@@ -38,6 +38,9 @@ auth_compl_response(Imsi, Result) ->
 session_termination_answer(Imsi, Result) ->
 	_Result = gen_server:call(?SERVER, {sta, Imsi, Result}).
 
+tx_as_request(Imsi) ->
+	_result = gen_server:call(?SERVER, {asr, Imsi}).
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Rx from emulated SWm wire:
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -49,6 +52,9 @@ auth_compl_request(Imsi, Apn) ->
 
 session_termination_request(Imsi) ->
 	gen_server:cast(?SERVER, {str, Imsi}).
+
+abort_session_answer(Imsi) ->
+	gen_server:cast(?SERVER, {asa, Imsi}).
 
 handle_cast({epdg_auth_req, Imsi, PdpTypeNr, Apn, EAP}, State) ->
 	case aaa_ue_fsm:get_pid_by_imsi(Imsi) of
@@ -85,6 +91,15 @@ handle_cast({str, Imsi}, State) ->
 	end,
 	{noreply, State};
 
+handle_cast({asa, Imsi}, State) ->
+	case aaa_ue_fsm:get_pid_by_imsi(Imsi) of
+	Pid when is_pid(Pid) ->
+		aaa_ue_fsm:ev_rx_swm_asa(Pid);
+	undefined ->
+		ok
+	end,
+	{noreply, State};
+
 handle_cast(Info, S) ->
 	error_logger:error_report(["unknown handle_cast", {module, ?MODULE}, {info, Info}, {state, S}]),
 	{noreply, S}.
@@ -103,6 +118,10 @@ handle_call({epdg_auth_compl_resp, Imsi, Result}, _From, State) ->
 
 handle_call({sta, Imsi, DiaRC}, _From, State) ->
 	epdg_diameter_swm:session_termination_answer(Imsi, DiaRC),
+	{reply, ok, State};
+
+handle_call({asr, Imsi}, _From, State) ->
+	epdg_diameter_swm:abort_session_request(Imsi),
 	{reply, ok, State};
 
 handle_call(Request, From, S) ->

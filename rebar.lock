@@ -31,7 +31,7 @@
   0},
  {<<"osmo_gsup">>,
   {git,"https://gerrit.osmocom.org/erlang/osmo_gsup",
-       {ref,"25ace76f98f7f931691fb02d86667062b4f2c8ad"}},
+       {ref,"777296babb15617942296b0f51c1dfb247a35e43"}},
   0},
  {<<"osmo_ss7">>,
   {git,"https://gerrit.osmocom.org/erlang/osmo_ss7",

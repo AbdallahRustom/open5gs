@@ -78,16 +78,25 @@ handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) wh
            'Vendor-Specific-Application-Id' = VendorAppId,
            'Auth-Session-State' = AuthSessState,
            'User-Name' = Imsi,
-           'Deregistration-Reason' = _DeregReason} = Req,
+           'Deregistration-Reason' = DeregReason} = Req,
     case aaa_ue_fsm:get_pid_by_imsi(Imsi) of
         Pid when is_pid(Pid) ->
-            aaa_ue_fsm:stop(Pid),
+            case DeregReason of
+                #'Deregistration-Reason'{'Reason-Code' = ?'REASON-CODE_PERMANENT_TERMINATION'} ->
+                    case aaa_ue_fsm:ev_rx_swx_rtr(Pid) of
+                        {error, _} -> aaa_ue_fsm:stop(Pid);
+                        _ -> ok
+                    end;
+                _ ->
+                    aaa_ue_fsm:stop(Pid)
+            end,
             Res = 2001, %% Success
             ERes = [];
         undefined ->
             Res = [],
             %% TS 29.229 6.2.2.1 DIAMETER_ERROR_USER_UNKNOWN
-            ERes = #'Experimental-Result'{'Vendor-Id' = ?VENDOR_ID_3GPP, 'Experimental-Result-Code' = 5001}
+            ERes = #'Experimental-Result'{'Vendor-Id' = ?VENDOR_ID_3GPP,
+                                          'Experimental-Result-Code' = 5001}
     end,
     Resp = #'RTA'{'Session-Id' = SessionId,
                   'Vendor-Specific-Application-Id' = VendorAppId,
@@ -109,7 +118,7 @@ handle_answer(#diameter_packet{msg = Msg, errors = Errors}, _Request, _SvcName, 
     #'MAA'{'Result-Code' = ResultCodeOpt,
            'Experimental-Result' = ExperimentalResultOpt} = Msg,
     DiaRC = parse_epdg_dia_rc(ResultCodeOpt, ExperimentalResultOpt),
-    case dia_rc_success(DiaRC) of
+    case conv:dia_rc_success(DiaRC) of
     ok ->
         #'MAA'{'SIP-Auth-Data-Item' = SipAuthTuples} = Msg,
         AuthTuples = lists:map(fun dia_sip2epdg_auth_tuple/1, SipAuthTuples),
@@ -127,7 +136,7 @@ handle_answer(#diameter_packet{msg = Msg, errors = Errors}, Request, _SvcName, P
     #'SAA'{'Result-Code' = ResultCodeOpt,
            'Experimental-Result' = ExperimentalResultOpt} = Msg,
     DiaRC = parse_epdg_dia_rc(ResultCodeOpt, ExperimentalResultOpt),
-    case dia_rc_success(DiaRC) of
+    case conv:dia_rc_success(DiaRC) of
     ok ->
         #'SAA'{'Non-3GPP-User-Data' = N3UA} = Msg,
         PGWAddresses = parse_pgw_addr_from_N3UA(N3UA),
@@ -164,10 +173,6 @@ handle_error(Reason, _Request, _SvcName, _Peer, ExtraPars) ->
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
-
-dia_rc_success(#epdg_dia_rc{result_code = 2001}) -> ok;
-dia_rc_success(#epdg_dia_rc{result_code = 2002}) -> ok;
-dia_rc_success(_) -> invalid_result_code.
 
 parse_epdg_dia_rc([], []) ->
     #epdg_dia_rc{vendor_id = undefined, result_code = 2001 };

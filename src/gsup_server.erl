@@ -56,7 +56,11 @@
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3, terminate/2]).
--export([auth_response/2, lu_response/2, tunnel_response/2, purge_ms_response/2, cancel_location_request/1]).
+-export([auth_response/2,
+	 lu_response/2,
+	 tunnel_response/2,
+	 purge_ms_response/2,
+	 cancel_location_request/1, cancel_location_request/2]).
 
 % TODO: -spec dia_sip2gsup(#epdg_auth_tuple{}) -> map().
 epdg_auth_tuple2gsup(#epdg_auth_tuple{rand = Rand, autn = Autn, res = Res, ck = Ck, ik = Ik}) ->
@@ -196,12 +200,17 @@ handle_cast({purge_ms_response, {Imsi, Result}}, State) ->
 	{noreply, State};
 
 % Our GSUP CEAI implementation for "IKEv2 Information Delete Request"
-handle_cast({cancel_location_request, Imsi}, State) ->
+handle_cast({cancel_location_request, Imsi, CancelType}, State) ->
 	lager:info("cancel_location_request for ~p~n", [Imsi]),
 	Socket = State#gsups_state.socket,
-	Resp = #{message_type => location_cancellation_req,
-		 imsi => Imsi
+	Resp0 = #{message_type => location_cancellation_req,
+		  imsi => Imsi,
+		  cn_domain => ?GSUP_CN_DOMAIN_PS
 		},
+	case CancelType of
+	undefined -> Resp = Resp0;
+	_ -> Resp = maps:put(cancellation_type, CancelType, Resp0)
+	end,
 	tx_gsup(Socket, Resp),
 	{noreply, State};
 
@@ -260,8 +269,10 @@ purge_ms_response(Imsi, Result) ->
 
 % Our GSUP CEAI implementation for "IKEv2 Information Delete Request"
 cancel_location_request(Imsi) ->
-	lager:info("cancel_location_request(~p)~n", [Imsi]),
-	gen_server:cast(?SERVER, {cancel_location_request, Imsi}).
+	cancel_location_request(Imsi, undefined).
+cancel_location_request(Imsi, CancelType) ->
+	lager:info("cancel_location_request(~p, ~p)~n", [Imsi, CancelType]),
+	gen_server:cast(?SERVER, {cancel_location_request, Imsi, CancelType}).
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
@@ -388,7 +399,8 @@ rx_gsup(Socket, _GsupMsgRx = #{message_type := purge_ms_req, imsi := Imsi}, Stat
 % Our GSUP CEAI implementation for "IKEv2 Information Delete Response".
 rx_gsup(_Socket, _GsupMsgRx = #{message_type := location_cancellation_res, imsi := Imsi}, State) ->
 	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
-		Pid when is_pid(Pid) -> epdg_ue_fsm:stop(Pid);
+		Pid when is_pid(Pid) ->
+			epdg_ue_fsm:cancel_location_result(Pid);
 		undefined -> State
 	end,
 	{noreply, State};
