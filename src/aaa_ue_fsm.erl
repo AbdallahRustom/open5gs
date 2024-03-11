@@ -39,7 +39,7 @@
 -include_lib("diameter_3gpp_ts29_273_s6b.hrl").
 -include("conv.hrl").
 
--export([start_link/1]).
+-export([start/1, stop/1]).
 -export([init/1,callback_mode/0,terminate/3]).
 -export([get_server_name_by_imsi/1, get_pid_by_imsi/1]).
 -export([ev_swm_auth_req/2, ev_swm_auth_compl/2, ev_rx_swm_str/1, ev_rx_swx_maa/2, ev_rx_swx_saa/2,
@@ -62,10 +62,18 @@ get_pid_by_imsi(Imsi) ->
         ServerName = get_server_name_by_imsi(Imsi),
         whereis(ServerName).
 
-start_link(Imsi) ->
+start(Imsi) ->
         ServerName = get_server_name_by_imsi(Imsi),
         lager:info("ue_fsm start_link(~p)~n", [ServerName]),
-        gen_statem:start_link({local, ServerName}, ?MODULE, Imsi, [{debug, [trace]}]).
+        gen_statem:start({local, ServerName}, ?MODULE, Imsi, [{debug, [trace]}]).
+
+stop(SrvRef) ->
+        try
+                gen_statem:stop(SrvRef)
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
 
 ev_swm_auth_req(Pid, {PdpTypeNr, Apn, EAP}) ->
         lager:info("ue_fsm ev_swm_auth_req~n", []),

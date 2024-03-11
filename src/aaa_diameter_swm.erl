@@ -7,14 +7,8 @@
 -include_lib("diameter_3gpp_ts29_273.hrl").
 
 -record(swm_state, {
-	table_id, % ets table id,
-	ues = sets:new()
+	table_id % ets table id
 }).
-
--record(swm_session, {
-	imsi       :: string(),
-	pid        :: pid()
-	}).
 
 -export([start_link/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
@@ -56,16 +50,18 @@ auth_compl_request(Imsi, Apn) ->
 session_termination_request(Imsi) ->
 	gen_server:cast(?SERVER, {str, Imsi}).
 
-handle_cast({epdg_auth_req, Imsi, PdpTypeNr, Apn, EAP}, State0) ->
-	{Sess, State1} = find_or_new_swm_session(Imsi, State0),
-	aaa_ue_fsm:ev_swm_auth_req(Sess#swm_session.pid, {PdpTypeNr, Apn, EAP}),
-	{noreply, State1};
+handle_cast({epdg_auth_req, Imsi, PdpTypeNr, Apn, EAP}, State) ->
+	case aaa_ue_fsm:get_pid_by_imsi(Imsi) of
+		undefined -> {ok, Pid} = aaa_ue_fsm:start(Imsi);
+		Pid -> Pid
+	end,
+	aaa_ue_fsm:ev_swm_auth_req(Pid, {PdpTypeNr, Apn, EAP}),
+	{noreply, State};
 
 handle_cast({epdg_auth_compl_req, Imsi, Apn}, State) ->
-	Sess = find_swm_session_by_imsi(Imsi, State),
-	case Sess of
-	#swm_session{imsi = Imsi} ->
-		aaa_ue_fsm:ev_swm_auth_compl(Sess#swm_session.pid, Apn);
+	case aaa_ue_fsm:get_pid_by_imsi(Imsi) of
+	Pid when is_pid(Pid) ->
+		aaa_ue_fsm:ev_swm_auth_compl(Pid, Apn);
 	undefined ->
 		RC_USER_UNKNOWN=5030,
 		epdg_diameter_swm:auth_compl_response(Imsi, {error, RC_USER_UNKNOWN})
@@ -73,10 +69,9 @@ handle_cast({epdg_auth_compl_req, Imsi, Apn}, State) ->
 	{noreply, State};
 
 handle_cast({str, Imsi}, State) ->
-	Sess = find_swm_session_by_imsi(Imsi, State),
-	case Sess of
-	#swm_session{} ->
-		case aaa_ue_fsm:ev_rx_swm_str(Sess#swm_session.pid) of
+	case aaa_ue_fsm:get_pid_by_imsi(Imsi) of
+	Pid when is_pid(Pid) ->
+		case aaa_ue_fsm:ev_rx_swm_str(Pid) of
 		ok -> ok; % Answering delayed due to SAR+SAA towards HSS.
 		{ok, DiaRC} when is_integer(DiaRC) ->
 			ok = epdg_diameter_swm:session_termination_answer(Imsi, DiaRC);
@@ -126,32 +121,3 @@ terminate(Reason, _S) ->
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
-
-new_swm_session(Imsi, State) ->
-	{ok, Pid} = aaa_ue_fsm:start_link(Imsi),
-	UE = #swm_session{imsi = Imsi, pid = Pid},
-	NewSt = State#swm_state{ues = sets:add_element(UE, State#swm_state.ues)},
-	{UE, NewSt}.
-
-% returns swm_session if found, undefined if not
-find_swm_session_by_imsi(Imsi, State) ->
-	{Imsi, Res} = sets:fold(
-		fun(UEsIt = #swm_session{imsi = LookupImsi}, {LookupImsi, _AccIn}) -> {LookupImsi, UEsIt};
-			(_, AccIn) -> AccIn
-		end,
-		{Imsi, undefined},
-		State#swm_state.ues),
-	Res.
-
-find_or_new_swm_session(Imsi, State) ->
-	UE = find_swm_session_by_imsi(Imsi, State),
-	case UE of
-	    #swm_session{imsi = Imsi} ->
-		{UE, State};
-	    undefined ->
-		new_swm_session(Imsi, State)
-	end.
-
-delete_swm_session(Imsi, State) ->
-	SetRemoved = sets:del_element(Imsi, State#swm_state.ues),
-	State#swm_state{ues = SetRemoved}.
