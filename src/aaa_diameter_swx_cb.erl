@@ -10,7 +10,8 @@
 %% diameter callbacks
 -export([peer_up/3, peer_down/3, pick_peer/4, pick_peer/5, prepare_request/3, prepare_request/4,
          prepare_retransmit/3,  prepare_retransmit/4,
-         handle_answer/4, handle_answer/5, handle_error/4, handle_error/5, handle_request/3]).
+         handle_request/3,
+         handle_answer/4, handle_answer/5, handle_error/4, handle_error/5]).
 
 %% peer_up/3
 peer_up(_SvcName, Peer, State) ->
@@ -67,6 +68,41 @@ prepare_retransmit(Packet, SvcName, Peer) ->
 prepare_retransmit(Packet, SvcName, Peer, ExtraPars) ->
     prepare_request(Packet, SvcName, Peer, ExtraPars).
 
+%% handle_request/3
+
+%% 3GPP TS 29.273 8.2.2.4 Network Initiated De-Registration by HSS Procedure
+handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) when is_record(Req, 'RTR') ->
+    lager:info("SWx Rx RTR from ~p: ~p~n", [Caps, Req]),
+    #diameter_caps{origin_host = {OH,_}, origin_realm = {OR,_}} = Caps,
+    #'RTR'{'Session-Id' = SessionId,
+           'Vendor-Specific-Application-Id' = VendorAppId,
+           'Auth-Session-State' = AuthSessState,
+           'User-Name' = Imsi,
+           'Deregistration-Reason' = _DeregReason} = Req,
+    case aaa_ue_fsm:get_pid_by_imsi(Imsi) of
+        Pid when is_pid(Pid) ->
+            aaa_ue_fsm:stop(Pid),
+            Res = 2001, %% Success
+            ERes = [];
+        undefined ->
+            Res = [],
+            %% TS 29.229 6.2.2.1 DIAMETER_ERROR_USER_UNKNOWN
+            ERes = #'Experimental-Result'{'Vendor-Id' = ?VENDOR_ID_3GPP, 'Experimental-Result-Code' = 5001}
+    end,
+    Resp = #'RTA'{'Session-Id' = SessionId,
+                  'Vendor-Specific-Application-Id' = VendorAppId,
+                  'Result-Code' = Res,
+                  'Experimental-Result' = ERes,
+                  'Auth-Session-State' = AuthSessState,
+                  'Origin-Host' = OH,
+                  'Origin-Realm' = OR},
+    lager:info("SWx Tx to ~p: ~p~n", [Caps, Resp]),
+    {reply, Resp};
+
+handle_request(Msg, _SvcName, Peer) ->
+    lager:error("SWx Rx unexpected msg from ~p: ~p~n", [Peer, Msg]),
+    erlang:error({unexpected, ?MODULE, ?LINE}).
+
 %% handle_answer/4
 handle_answer(#diameter_packet{msg = Msg, errors = Errors}, _Request, _SvcName, Peer, ReqPid) when is_record(Msg, 'MAA')  ->
     lager:info("SWx Rx MAA ~p: ~p/ Errors ~p ~n", [Peer, Msg, Errors]),
@@ -82,6 +118,7 @@ handle_answer(#diameter_packet{msg = Msg, errors = Errors}, _Request, _SvcName, 
         aaa_ue_fsm:ev_rx_swx_maa(ReqPid, {error, DiaRC})
     end,
     {ok, Msg};
+
 handle_answer(#diameter_packet{msg = Msg, errors = Errors}, Request, _SvcName, Peer, ReqPid) when is_record(Msg, 'SAA')  ->
     lager:info("SWx Rx SAA ~p: ~p/ Errors ~p ~n", [Peer, Msg, Errors]),
     % Recover fields from originating request:
@@ -103,9 +140,11 @@ handle_answer(#diameter_packet{msg = Msg, errors = Errors}, Request, _SvcName, P
         aaa_ue_fsm:ev_rx_swx_saa(ReqPid, {error, SAType, DiaRC})
     end,
     {ok, Msg}.
+
 handle_answer(#diameter_packet{msg = Msg, errors = []}, _Request, _SvcName, Peer) ->
     lager:info("SWx Rx ~p: ~p~n", [Peer, Msg]),
     {ok, Msg};
+
 handle_answer(#diameter_packet{msg = Msg, errors = Errors}, _Request, _SvcName, Peer) ->
     lager:info("SWx Rx ~p: ~p / Errors ~p ~n", [Peer, Msg, Errors]),
     {error, Errors}.
@@ -121,10 +160,6 @@ handle_error(Reason, _Request, _SvcName, _Peer) ->
 handle_error(Reason, _Request, _SvcName, _Peer, ExtraPars) ->
     lager:error("SWx error: ~p, ExtraPars: ~p~n", [Reason, ExtraPars]),
     {error, Reason}.
-
-%% handle_request/3
-handle_request(_Packet, _SvcName, _Peer) ->
-    erlang:error({unexpected, ?MODULE, ?LINE}).
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions

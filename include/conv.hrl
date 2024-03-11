@@ -31,6 +31,8 @@
 %
 -hrl_name('conv.hrl').
 
+-define(VENDOR_ID_3GPP, 10415).
+
 %% Can Hold information about Result-Code or Experimental-Result:
 -record(epdg_dia_rc, {
         vendor_id      :: non_neg_integer(), %% or undefined if Result-Code
