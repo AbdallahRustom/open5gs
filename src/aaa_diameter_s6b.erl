@@ -47,12 +47,9 @@
 -export([start_link/0]).
 -export([start/0, stop/0, terminate/2]).
 %% gen_server Function Exports
--export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, peer_down/3]).
 -export([code_change/3]).
--export([multimedia_auth_request/6]).
--export([server_assignment_request/3]).
 -export([tx_aa_answer/2, tx_st_answer/2]).
--export([test/0, test/1]).
 
 %% Diameter Application Definitions
 -define(SERVER, ?MODULE).
@@ -96,11 +93,6 @@
            {module, ?CALLBACK_MOD},
            {answer_errors, callback}]}]).
 
--record(state, {
-        handlers,
-        peers = #{}
-}).
-
 %% @doc starts gen_server implementation process
 -spec start() -> ok | {error, term()}.
 start() ->
@@ -115,9 +107,7 @@ stop() ->
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
-peer_down(API, SvcName, {PeerRef, _} = Peer) ->
-    % fixme: why do we still have ets here?
-    (catch ets:delete(?MODULE, {API, PeerRef})),
+peer_down(_API, SvcName, {_PeerRef, _} = Peer) ->
     gen_server:cast(?SERVER, {peer_down, SvcName, Peer}),
     ok.
 
@@ -133,20 +123,6 @@ init(State) ->
     {ok, _} = listen({address, Proto, Ip, Port}, {timer, ConnectTimer, WatchdogTimer, WatchdogConfig}),
     {ok, State}.
 
-test() ->
-    test("001011234567890").
-
-test(IMSI) ->
-    multimedia_auth_request(IMSI, 3, "EAP-AKA", 1, [], []).
-
-multimedia_auth_request(IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey) ->
-    gen_server:call(?SERVER,
-                          {mar, {IMSI, NumAuthItems, AuthScheme, RAT, CKey, IntegrityKey}}).
-% APN is optional and should be []
-server_assignment_request(IMSI, Type, APN) ->
-    gen_server:call(?SERVER,
-                          {sar, {IMSI, Type, APN}}).
-
 tx_aa_answer(Pid, DiaRC) ->
     % handle_request(AAR) was spawned into its own process, and it's blocked waiting for AAA:
     Pid ! {aaa, DiaRC}.
@@ -155,12 +131,8 @@ tx_st_answer(Pid, DiaRC) ->
     % handle_request(STR) was spawned into its own process, and it's blocked waiting for STA:
     Pid ! {sta, DiaRC}.
 
-result_code_success(2001) -> ok;
-result_code_success(2002) -> ok;
-result_code_success(_) -> invalid_result_code.
-
-handle_call({aar, {IMSI, Type, APN}}, _From, State) ->
-    SessionId = diameter:session_id(application:get_env(?ENV_APP_NAME, origin_host, ?ENV_DEFAULT_ORIG_HOST)).
+handle_call(Info, _From, State) ->
+    error_logger:error_report(["unknown handle_call", {module, ?MODULE}, {info, Info}, {state, State}]).
 
 %% @callback gen_server
 handle_cast(stop, State) ->
