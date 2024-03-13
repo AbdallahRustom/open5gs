@@ -179,7 +179,7 @@ received_gtpc_delete_bearer_request(Pid) ->
 ev_handle({call, From}, {auth_request, PdpTypeNr, Apn, EAP}, Data) ->
         case epdg_diameter_swm:auth_request(Data#ue_fsm_data.imsi, PdpTypeNr, Apn, EAP) of
         ok -> {next_state, state_wait_auth_resp, Data, [{reply,From,ok}]};
-        {error, Err} -> {stop_and_reply, Err, Data, [{reply,From,{error,Err}}]}
+        {error, Err} -> {stop_and_reply, Err, [{reply,From,{error,Err}}], Data}
 	end.
 
 %% ------------------------------------------------------------------
@@ -211,7 +211,7 @@ state_new({call, _From} = EvType, {auth_request, PdpTypeNr, Apn, EAP} = EvConten
 
 state_new({call, From}, purge_ms_request, Data) ->
         lager:info("ue_fsm state_new event=purge_ms_request, ~p~n", [Data]),
-        {stop_and_reply, purge_ms_request, Data, [{reply,From,ok}]}.
+        {stop_and_reply, purge_ms_request, [{reply,From,ok}], Data}.
 
 state_wait_auth_resp(enter, _OldState, Data) ->
         {keep_state, Data};
@@ -242,7 +242,7 @@ state_authenticating({call, From}, lu_request, Data) ->
         % Rx "GSUP CEAI LU Req" is our way of saying Rx "Swm Diameter-EAP REQ (DER) with EAP AVP containing successuful auth":
         case epdg_diameter_swm:auth_compl_request(Data#ue_fsm_data.imsi, Data#ue_fsm_data.apn) of
         ok -> {keep_state, Data, [{reply,From,ok}]};
-        {error, Err} -> {stop_and_reply, Err, Data, [{reply,From,{error,Err}}]}
+        {error, Err} -> {stop_and_reply, Err, [{reply,From,{error,Err}}], Data}
         end;
 
 % Rx Swm Diameter-EAP Answer (DEA) containing APN-Configuration, triggered by
