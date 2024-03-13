@@ -260,7 +260,7 @@ purge_ms_response(Imsi, Result) ->
 
 % Our GSUP CEAI implementation for "IKEv2 Information Delete Request"
 cancel_location_request(Imsi) ->
-	lager:info("cancel_location_request(~p): ~p~n", [Imsi]),
+	lager:info("cancel_location_request(~p)~n", [Imsi]),
 	gen_server:cast(?SERVER, {cancel_location_request, Imsi}).
 
 %% ------------------------------------------------------------------
