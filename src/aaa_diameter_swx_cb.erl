@@ -70,6 +70,43 @@ prepare_retransmit(Packet, SvcName, Peer, ExtraPars) ->
 
 %% handle_request/3
 
+%% 3GPP TS 29.273 8.2.2.2 HSS Initiated Update of User Profile Procedure
+handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) when is_record(Req, 'PPR') ->
+    lager:info("SWx Rx PPR from ~p: ~p~n", [Caps, Req]),
+    #diameter_caps{origin_host = {OH,_}, origin_realm = {OR,_}} = Caps,
+    #'PPR'{'Session-Id' = SessionId,
+           'Vendor-Specific-Application-Id' = VendorAppId,
+           'Auth-Session-State' = AuthSessState,
+           'User-Name' = Imsi,
+           'Non-3GPP-User-Data' = N3UAopt} = Req,
+    case aaa_ue_fsm:get_pid_by_imsi(Imsi) of
+        Pid when is_pid(Pid) ->
+            _PGWAddresses = parse_pgw_addr_from_N3UA(N3UAopt),
+            %% TODO: in successful case, we want to validate how this prcoedure extends to other interfaces:
+            %% """ 3GPP TS 29.273 8.1.2.3.3:
+            %% After a successful user profile download, the 3GPP AAA Server shall
+            %% initiate re-authentication procedure as described
+            %% in clause 7.2.2.4 if the subscriber has previously been authenticated
+            %% and authorized to untrusted non-3GPP access.
+            %% """
+            Res = 2001, %% Success
+            ERes = [];
+        undefined ->
+            Res = [],
+            %% TS 29.229 6.2.2.1 DIAMETER_ERROR_USER_UNKNOWN
+            ERes = #'Experimental-Result'{'Vendor-Id' = ?VENDOR_ID_3GPP,
+                                          'Experimental-Result-Code' = 5001}
+    end,
+    Resp = #'PPA'{'Session-Id' = SessionId,
+                  'Vendor-Specific-Application-Id' = VendorAppId,
+                  'Result-Code' = Res,
+                  'Experimental-Result' = ERes,
+                  'Auth-Session-State' = AuthSessState,
+                  'Origin-Host' = OH,
+                  'Origin-Realm' = OR},
+    lager:info("SWx Tx to ~p: ~p~n", [Caps, Resp]),
+    {reply, Resp};
+
 %% 3GPP TS 29.273 8.2.2.4 Network Initiated De-Registration by HSS Procedure
 handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) when is_record(Req, 'RTR') ->
     lager:info("SWx Rx RTR from ~p: ~p~n", [Caps, Req]),
