@@ -230,7 +230,7 @@ state_wait_swx_maa(enter, _OldState, Data) ->
 
 state_wait_swx_maa({call, From}, {rx_swx_maa, Result}, Data) ->
         lager:info("ue_fsm state_wait_swx_maa event=rx_swx_maa, ~p~n", [Data]),
-        aaa_diameter_swm:auth_response(Data#ue_fsm_data.imsi, Result),
+        aaa_diameter_swm:tx_auth_response(Data#ue_fsm_data.imsi, Result),
         {next_state, state_new, Data, [{reply,From,ok}]}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -244,10 +244,10 @@ state_wait_swx_saa({call, From}, {rx_swx_saa, Result}, Data) ->
         lager:info("ue_fsm state_wait_swx_saa event=rx_swx_saa ~p, ~p~n", [Result, Data]),
         case Result of
         {error, _SAType, DiaRC} ->
-                aaa_diameter_swm:auth_compl_response(Data#ue_fsm_data.imsi, {error, DiaRC}),
+                aaa_diameter_swm:tx_auth_compl_response(Data#ue_fsm_data.imsi, {error, DiaRC}),
                 {next_state, state_new, Data, [{reply,From,ok}]};
         {ok, _SAType, ResInfo} ->
-                aaa_diameter_swm:auth_compl_response(Data#ue_fsm_data.imsi, {ok, ResInfo}),
+                aaa_diameter_swm:tx_auth_compl_response(Data#ue_fsm_data.imsi, {ok, ResInfo}),
                 {next_state, state_authenticated, Data, [{reply,From,ok}]}
         end.
 
@@ -350,7 +350,7 @@ state_authenticated_wait_swx_saa({call, From}, {rx_swx_saa, Result}, Data) ->
         ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_USER_DEREGISTRATION' ->
                 case Data#ue_fsm_data.s6b_resp_pid of
                 undefined -> %% SWm initiated
-                        aaa_diameter_swm:session_termination_answer(Data#ue_fsm_data.imsi, DiaRC),
+                        aaa_diameter_swm:tx_session_termination_answer(Data#ue_fsm_data.imsi, DiaRC),
                         Data1 = Data#ue_fsm_data{epdg_sess_active = false},
                         {next_state, state_new, Data1, [{reply,From,ok}]};
                 _ -> %% S6b initiated

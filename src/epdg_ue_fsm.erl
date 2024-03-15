@@ -206,7 +206,7 @@ received_gtpc_delete_bearer_request(Pid) ->
 %% ------------------------------------------------------------------
 
 ev_handle({call, From}, {auth_request, PdpTypeNr, Apn, EAP}, Data) ->
-        case epdg_diameter_swm:auth_request(Data#ue_fsm_data.imsi, PdpTypeNr, Apn, EAP) of
+        case epdg_diameter_swm:tx_auth_request(Data#ue_fsm_data.imsi, PdpTypeNr, Apn, EAP) of
         ok -> {next_state, state_wait_auth_resp, Data, [{reply,From,ok}]};
         {error, Err} -> {stop_and_reply, Err, [{reply,From,{error,Err}}], Data}
 	end.
@@ -281,7 +281,7 @@ state_authenticating({call, _From} = EvType, {auth_request, PdpTypeNr, Apn, EAP}
 state_authenticating({call, From}, lu_request, Data) ->
         lager:info("ue_fsm state_authenticating event=lu_request, ~p~n", [Data]),
         % Rx "GSUP CEAI LU Req" is our way of saying Rx "Swm Diameter-EAP REQ (DER) with EAP AVP containing successuful auth":
-        case epdg_diameter_swm:auth_compl_request(Data#ue_fsm_data.imsi, Data#ue_fsm_data.apn) of
+        case epdg_diameter_swm:tx_auth_compl_request(Data#ue_fsm_data.imsi, Data#ue_fsm_data.apn) of
         ok -> {keep_state, Data, [{reply,From,ok}]};
         {error, Err} -> {stop_and_reply, Err, [{reply,From,{error,Err}}], Data}
         end;
@@ -484,7 +484,7 @@ state_wait_swm_session_termination_answer(enter, _OldState, Data) ->
         % Send STR towards AAA-Server
         % % 3GPP TS 29.273 7.1.2.3
         lager:info("ue_fsm state_wait_swm_session_termination_answer event=enter, ~p~n", [Data]),
-        case epdg_diameter_swm:session_termination_request(Data#ue_fsm_data.imsi) of
+        case epdg_diameter_swm:tx_session_termination_request(Data#ue_fsm_data.imsi) of
         ok -> {keep_state, Data};
         {error, _Err} ->
                 case Data#ue_fsm_data.tear_down_gsup_needed of
@@ -548,7 +548,7 @@ state_dereg_net_initiated_wait_s2b_delete_session_resp(enter, _OldState, Data) -
         ok ->
                 {keep_state, Data, {state_timeout,?TIMEOUT_VAL_WAIT_GTP_ANSWER,s2b_delete_session_timeout}};
         {error, Err} ->
-                epdg_diameter_swm:abort_session_answer(Data#ue_fsm_data.imsi),
+                epdg_diameter_swm:tx_abort_session_answer(Data#ue_fsm_data.imsi),
                 {stop, {error,Err}}
         end;
 
@@ -557,7 +557,7 @@ state_dereg_net_initiated_wait_s2b_delete_session_resp({call, From}, {received_g
         #{{v2_cause,0} := CauseIE} = IEs,
         GtpCause = gtp_utils:enum_v2_cause(CauseIE#v2_cause.v2_cause),
         lager:debug("Cause: GTP_atom=~p -> GTP_int=~p~n", [CauseIE#v2_cause.v2_cause, GtpCause]),
-        epdg_diameter_swm:abort_session_answer(Data#ue_fsm_data.imsi),
+        epdg_diameter_swm:tx_abort_session_answer(Data#ue_fsm_data.imsi),
         {stop_and_reply, normal, [{reply,From,ok}], Data};
 
 state_dereg_net_initiated_wait_s2b_delete_session_resp({call, From}, Event, Data) ->
@@ -567,5 +567,5 @@ state_dereg_net_initiated_wait_s2b_delete_session_resp({call, From}, Event, Data
 
 state_dereg_net_initiated_wait_s2b_delete_session_resp(state_timeout, s2b_delete_session_timeout, Data) ->
         lager:error("ue_fsm state_dereg_net_initiated_wait_s2b_delete_session_resp: Timeout ~p, ~p~n", [s2b_delete_session_timeout, Data]),
-        epdg_diameter_swm:abort_session_answer(Data#ue_fsm_data.imsi),
+        epdg_diameter_swm:tx_abort_session_answer(Data#ue_fsm_data.imsi),
         {stop, normal}.
