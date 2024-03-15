@@ -44,7 +44,7 @@
 -export([get_server_name_by_imsi/1, get_pid_by_imsi/1]).
 -export([ev_rx_swm_auth_req/2, ev_rx_swm_reauth_answer/2, ev_rx_swm_auth_compl/2, ev_rx_swm_str/1, ev_rx_swm_asa/1,
          ev_rx_swx_maa/2, ev_rx_swx_saa/2, ev_rx_swx_ppr/2, ev_rx_swx_rtr/1,
-         ev_rx_s6b_aar/2, ev_rx_s6b_str/1, ev_rx_s6b_asa/2]).
+         ev_rx_s6b_aar/2, ev_rx_s6b_str/1, ev_rx_s6b_raa/2, ev_rx_s6b_asa/2]).
 -export([state_new/3,
          state_wait_swx_maa/3,
          state_wait_swx_saa/3,
@@ -175,6 +175,15 @@ ev_rx_s6b_aar(Pid, {NAI, Apn, AgentInfoOpt}) ->
                 {error, Err}
         end.
 
+ev_rx_s6b_raa(Pid, Result) ->
+        lager:info("ue_fsm ev_rx_s6b_raa: ~p~n", [Result]),
+        try
+                gen_statem:call(Pid, {rx_s6b_raa, Result})
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
+
 ev_rx_s6b_asa(Pid, Result) ->
         lager:info("ue_fsm ev_rx_s6b_asa: ~p~n", [Result]),
         try
@@ -279,13 +288,23 @@ state_authenticated(enter, _OldState, Data) ->
 
 state_authenticated({call, {Pid, _Tag} = From}, {rx_s6b_aar, NAI, Apn, AgentInfoOpt}, Data) ->
         lager:info("ue_fsm state_authenticated event=rx_s6b_aar NAI=~p Apn=~p AgentInfo=~p, ~p~n", [NAI, Apn, AgentInfoOpt, Data]),
-        case aaa_diameter_swx:server_assignment_request(Data#ue_fsm_data.imsi,
-                                                        ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_PGW_UPDATE',
-                                                        Apn, AgentInfoOpt) of
-        ok ->   Data1 = Data#ue_fsm_data{s6b_resp_pid = Pid, nai = NAI, apn = Apn},
-                {next_state, state_authenticated_wait_swx_saa, Data1, [{reply,From,ok}]};
-        {error, Err} -> {keep_state, Data, [{reply,From,{error, Err}}]}
+        %% TODO: Actually here we'd need to send SAR based on whether
+        %% PGW Address changed in AgentInfoOpt, which for sure didn't in
+        %% current status of osmo-epdg...
+        case Data#ue_fsm_data.pgw_sess_active of
+        false ->
+                case aaa_diameter_swx:server_assignment_request(Data#ue_fsm_data.imsi,
+                                                                ?'DIAMETER_CX_SERVER-ASSIGNMENT-TYPE_PGW_UPDATE',
+                                                                Apn, AgentInfoOpt) of
+                ok ->   Data1 = Data#ue_fsm_data{s6b_resp_pid = Pid, nai = NAI, apn = Apn},
+                        {next_state, state_authenticated_wait_swx_saa, Data1, [{reply,From,ok}]};
+                {error, Err} -> {keep_state, Data, [{reply,From,{error, Err}}]}
+                end;
+        true ->
+                aaa_diameter_s6b:tx_aa_answer(Pid, #epdg_dia_rc{result_code = 2001}),
+                {keep_state, Data, [{reply,From,ok}]}
         end;
+
 
 state_authenticated({call, From}, rx_swm_str, Data) ->
         lager:info("ue_fsm state_authenticated event=rx_swm_str, ~p~n", [Data]),
@@ -340,13 +359,19 @@ state_authenticated({call, From}, {rx_swx_ppr, _PGWAddresses}, Data) ->
         %% After a successful user profile download, the 3GPP AAA Server shall
         %% initiate re-authentication procedure as described
         %% in clause 7.2.2.4
-        case aaa_diameter_swm:tx_reauth_request(Data#ue_fsm_data.imsi) of
-        ok ->  {keep_state, Data, [{reply,From,ok}]};
-        {error, Err} ->  {keep_state, Data, [{reply,From,{error, Err}}]}
-        end;
+        aaa_diameter_swm:tx_reauth_request(Data#ue_fsm_data.imsi),
+        aaa_diameter_s6b:tx_reauth_request(Data#ue_fsm_data.nai),
+        %% Following a successful download of subscription and equipment trace data, the 3GPP AAA Server shall forward the
+        %% trace data by initiating reauthorization towards all PDN GWs that have an active authorization session.
+        {keep_state, Data, [{reply,From,ok}]};
 
 state_authenticated({call, From}, {rx_swm_reauth_answer, Result}, Data) ->
         lager:info("ue_fsm state_authenticated event=rx_swm_reauth_answer ~p, ~p~n", [Result, Data]),
+        %% SWx PPA was already answered immediately when PPR was received, nothing to do here.
+        {keep_state, Data, [{reply,From,ok}]};
+
+state_authenticated({call, From}, {rx_s6b_raa, Result}, Data) ->
+        lager:info("ue_fsm state_authenticated event=rx_s6b_raa ~p, ~p~n", [Result, Data]),
         %% SWx PPA was already answered immediately when PPR was received, nothing to do here.
         {keep_state, Data, [{reply,From,ok}]};
 

@@ -49,7 +49,7 @@
 %% gen_server Function Exports
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, peer_down/3]).
 -export([code_change/3]).
--export([tx_as_request/1]).
+-export([tx_reauth_request/1, tx_as_request/1]).
 -export([tx_aa_answer/2, tx_st_answer/2]).
 
 %% Diameter Application Definitions
@@ -138,8 +138,29 @@ tx_st_answer(Pid, DiaRC) ->
     % handle_request(STR) was spawned into its own process, and it's blocked waiting for STA:
     Pid ! {sta, DiaRC}.
 
+tx_reauth_request(NAI) ->
+    gen_server:call(?SERVER, {rar, NAI}).
+
 tx_as_request(NAI) ->
     gen_server:call(?SERVER, {asr, NAI}).
+
+handle_call({rar, NAI}, _From, State) ->
+    lager:debug("S6b Tx RAR NAI=~p~n", [NAI]),
+    SessionId = diameter:session_id(application:get_env(?ENV_APP_NAME, dia_s6b_origin_host, ?ENV_DEFAULT_ORIG_HOST)),
+    RAR = #'RAR'{'Session-Id' = SessionId,
+                 'Auth-Application-Id' = ?DIAMETER_APP_ID_S6b,
+                 'Re-Auth-Request-Type' = ?'RE-AUTH-REQUEST-TYPE_AUTHORIZE_ONLY',
+                 'User-Name' = [NAI]
+                },
+    lager:debug("S6b Tx RAR: ~p~n", [RAR]),
+    Ret = diameter_call(RAR, State),
+    case Ret of
+        ok ->
+            {reply, ok, State};
+        {error, Err} ->
+            lager:error("Error: ~w~n", [Err]),
+            {reply, {error, Err}, State}
+    end;
 
 handle_call({asr, NAI}, _From, State) ->
     lager:debug("S6b Tx ASR NAI=~p~n", [NAI]),

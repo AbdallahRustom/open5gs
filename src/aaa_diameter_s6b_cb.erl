@@ -41,6 +41,15 @@ prepare_request(#diameter_packet{msg = [ T | Avps ]}, _, {_, Caps})
       | Avps]};
 % TODO: is there a simple way to capture all the following requests?
 prepare_request(#diameter_packet{msg = Req}, _, {_, Caps})
+		when is_record(Req, 'RAR') ->
+    #diameter_caps{origin_host = {OH, DH}, origin_realm = {OR, DR}} = Caps,
+	Msg = Req#'RAR'{'Origin-Host' = OH,
+                    'Origin-Realm' = OR,
+                    'Destination-Realm' = DR,
+                    'Destination-Host' = DH},
+    lager:debug("S6b prepare_request: ~p~n", [Msg]),
+	{send, Msg};
+prepare_request(#diameter_packet{msg = Req}, _, {_, Caps})
 		when is_record(Req, 'ASR') ->
     #diameter_caps{origin_host = {OH, DH}, origin_realm = {OR, DR}} = Caps,
 	Msg = Req#'ASR'{'Origin-Host' = OH,
@@ -134,6 +143,22 @@ handle_request(Packet, _SvcName, Peer) ->
     erlang:error({unexpected, ?MODULE, ?LINE}).
 
 %% handle_answer/4
+handle_answer(#diameter_packet{msg = Msg, errors = Errors}, Request, _SvcName, Peer) when is_record(Msg, 'RAA')  ->
+    lager:info("S6b Rx RAA ~p: ~p/ Errors ~p ~n", [Peer, Msg, Errors]),
+    % Obtain Imsi from originating Request:
+    #'RAR'{'User-Name' = [NAI]} = Request,
+    Imsi = conv:nai_to_imsi(NAI),
+    PidRes = aaa_ue_fsm:get_pid_by_imsi(Imsi),
+    #'RAA'{'Result-Code' = ResultCode} = Msg,
+    DiaRC = #epdg_dia_rc{result_code = ResultCode},
+    case conv:dia_rc_success(DiaRC) of
+    ok ->
+        aaa_ue_fsm:ev_rx_s6b_raa(PidRes, ok);
+    _ ->
+        aaa_ue_fsm:ev_rx_s6b_raa(PidRes, {error, DiaRC})
+    end,
+    {ok, Msg};
+
 handle_answer(#diameter_packet{msg = Msg, errors = Errors}, Request, _SvcName, Peer) when is_record(Msg, 'ASA')  ->
     lager:info("S6b Rx ASA ~p: ~p/ Errors ~p ~n", [Peer, Msg, Errors]),
     % Obtain Imsi from originating Request:
