@@ -16,9 +16,14 @@
 
 -export([rx_auth_request/4,
 	 rx_auth_compl_request/2,
+	 rx_reauth_answer/2,
 	 rx_session_termination_request/1,
 	 rx_abort_session_answer/1]).
--export([tx_auth_response/2, tx_auth_compl_response/2, tx_session_termination_answer/2, tx_as_request/1]).
+-export([tx_auth_response/2,
+	 tx_auth_compl_response/2,
+	 tx_reauth_request/1,
+	 tx_session_termination_answer/2,
+	 tx_as_request/1]).
 
 -define(SERVER, ?MODULE).
 
@@ -32,11 +37,15 @@ init([]) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Tx over emulated SWm wire:
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 tx_auth_response(Imsi, Result) ->
 	_Result = gen_server:call(?SERVER, {epdg_auth_resp, Imsi, Result}).
 
 tx_auth_compl_response(Imsi, Result) ->
 	_Result = gen_server:call(?SERVER, {epdg_auth_compl_resp, Imsi, Result}).
+
+tx_reauth_request(Imsi) ->
+	_Result = gen_server:call(?SERVER, {rar, Imsi}).
 
 tx_session_termination_answer(Imsi, Result) ->
 	_Result = gen_server:call(?SERVER, {sta, Imsi, Result}).
@@ -53,11 +62,16 @@ rx_auth_request(Imsi, PdpTypeNr, Apn, EAP) ->
 rx_auth_compl_request(Imsi, Apn) ->
 	gen_server:cast(?SERVER, {epdg_auth_compl_req, Imsi, Apn}).
 
+rx_reauth_answer(Imsi, Result) ->
+	gen_server:cast(?SERVER, {raa, Imsi, Result}).
+
 rx_session_termination_request(Imsi) ->
 	gen_server:cast(?SERVER, {str, Imsi}).
 
 rx_abort_session_answer(Imsi) ->
 	gen_server:cast(?SERVER, {asa, Imsi}).
+
+%% handle_cast: Rx side
 
 handle_cast({epdg_auth_req, Imsi, PdpTypeNr, Apn, EAP}, State) ->
 	case aaa_ue_fsm:get_pid_by_imsi(Imsi) of
@@ -74,6 +88,13 @@ handle_cast({epdg_auth_compl_req, Imsi, Apn}, State) ->
 	undefined ->
 		RC_USER_UNKNOWN=5030,
 		epdg_diameter_swm:rx_auth_compl_response(Imsi, {error, RC_USER_UNKNOWN})
+	end,
+	{noreply, State};
+
+handle_cast({raa, Imsi, Result}, State) ->
+	case aaa_ue_fsm:get_pid_by_imsi(Imsi) of
+	Pid when is_pid(Pid) -> aaa_ue_fsm:ev_rx_swm_reauth_answer(Pid, Result);
+	undefined -> ok
 	end,
 	{noreply, State};
 
@@ -111,12 +132,17 @@ handle_info(Info, S) ->
 	error_logger:error_report(["unknown handle_info", {module, ?MODULE}, {info, Info}, {state, S}]),
 	{noreply, S}.
 
+%% handle_call: Tx side
 handle_call({epdg_auth_resp, Imsi, Result}, _From, State) ->
 	epdg_diameter_swm:rx_auth_response(Imsi, Result),
 	{reply, ok, State};
 
 handle_call({epdg_auth_compl_resp, Imsi, Result}, _From, State) ->
 	epdg_diameter_swm:rx_auth_compl_response(Imsi, Result),
+	{reply, ok, State};
+
+handle_call({rar, Imsi}, _From, State) ->
+	epdg_diameter_swm:rx_reauth_request(Imsi),
 	{reply, ok, State};
 
 handle_call({sta, Imsi, DiaRC}, _From, State) ->

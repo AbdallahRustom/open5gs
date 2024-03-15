@@ -42,8 +42,8 @@
 -export([start/1, stop/1]).
 -export([init/1,callback_mode/0,terminate/3]).
 -export([get_server_name_by_imsi/1, get_pid_by_imsi/1]).
--export([ev_rx_swm_auth_req/2, ev_rx_swm_auth_compl/2, ev_rx_swm_str/1, ev_rx_swm_asa/1,
-         ev_rx_swx_maa/2, ev_rx_swx_saa/2, ev_rx_swx_rtr/1,
+-export([ev_rx_swm_auth_req/2, ev_rx_swm_reauth_answer/2, ev_rx_swm_auth_compl/2, ev_rx_swm_str/1, ev_rx_swm_asa/1,
+         ev_rx_swx_maa/2, ev_rx_swx_saa/2, ev_rx_swx_ppr/2, ev_rx_swx_rtr/1,
          ev_rx_s6b_aar/2, ev_rx_s6b_str/1, ev_rx_s6b_asa/2]).
 -export([state_new/3,
          state_wait_swx_maa/3,
@@ -94,6 +94,14 @@ ev_rx_swm_auth_req(Pid, {PdpTypeNr, Apn, EAP}) ->
         exit:Err ->
                 {error, Err}
         end.
+ev_rx_swm_reauth_answer(Pid, Result) ->
+        lager:info("ue_fsm ev_rx_swm_reauth_answer~n", []),
+        try
+                gen_statem:call(Pid, {rx_swm_reauth_answer, Result})
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
 
 ev_rx_swm_auth_compl(Pid, Apn) ->
         lager:info("ue_fsm ev_rx_swm_auth_compl~n", []),
@@ -135,6 +143,15 @@ ev_rx_swx_saa(Pid, Result) ->
         lager:info("ue_fsm ev_rx_swx_saa~n", []),
         try
                 gen_statem:call(Pid, {rx_swx_saa, Result})
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
+
+ev_rx_swx_ppr(Pid, PGWAddresses) ->
+        lager:info("ue_fsm ev_rx_swx_ppr~n", []),
+        try
+                gen_statem:call(Pid, {rx_swx_ppr, PGWAddresses})
         catch
         exit:Err ->
                 {error, Err}
@@ -317,6 +334,21 @@ state_authenticated({call, {Pid, _Tag} = From}, rx_s6b_str, Data) ->
 state_authenticated({call, _From}, {rx_swm_auth_req, PdpTypeNr, Apn, EAP}, Data) ->
         lager:info("ue_fsm state_authenticated event=rx_swm_auth_req {~p, ~p, ~p}, ~p~n", [PdpTypeNr, Apn, EAP, Data]),
         {next_state, state_new, Data, [postpone]};
+
+state_authenticated({call, From}, {rx_swx_ppr, _PGWAddresses}, Data) ->
+        %% 3GPP TS 29.273 8.1.2.3.3:
+        %% After a successful user profile download, the 3GPP AAA Server shall
+        %% initiate re-authentication procedure as described
+        %% in clause 7.2.2.4
+        case aaa_diameter_swm:tx_reauth_request(Data#ue_fsm_data.imsi) of
+        ok ->  {keep_state, Data, [{reply,From,ok}]};
+        {error, Err} ->  {keep_state, Data, [{reply,From,{error, Err}}]}
+        end;
+
+state_authenticated({call, From}, {rx_swm_reauth_answer, Result}, Data) ->
+        lager:info("ue_fsm state_authenticated event=rx_swm_reauth_answer ~p, ~p~n", [Result, Data]),
+        %% SWx PPA was already answered immediately when PPR was received, nothing to do here.
+        {keep_state, Data, [{reply,From,ok}]};
 
 state_authenticated({call, From}, rx_swx_rtr, Data) ->
         lager:info("ue_fsm state_authenticated event=rx_swx_rtr ~p~n", [Data]),

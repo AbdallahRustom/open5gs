@@ -5,6 +5,7 @@
 -behaviour(gen_server).
 
 -include_lib("diameter_3gpp_ts29_273_swx.hrl").
+-include("conv.hrl").
 
 -record(swm_state, {
 	sessions = sets:new()
@@ -20,11 +21,13 @@
 -export([code_change/3, terminate/2]).
 
 -export([tx_auth_request/4,
+	 tx_reauth_answer/2,
 	 tx_auth_compl_request/2,
 	 tx_session_termination_request/1,
 	 tx_abort_session_answer/1]).
 -export([rx_auth_response/2,
 	 rx_auth_compl_response/2,
+	 rx_reauth_request/1,
 	 rx_session_termination_answer/2,
 	 rx_abort_session_request/1]).
 
@@ -53,6 +56,11 @@ tx_auth_request(Imsi, PdpTypeNr, Apn, EAP) ->
 			ok;
 		_ -> Result
 	end.
+
+tx_reauth_answer(Imsi, DiaRC) ->
+	% In Diameter we use Imsi as strings, as done by diameter module.
+	ImsiStr = binary_to_list(Imsi),
+	_Result = gen_server:call(?SERVER, {raa, ImsiStr, DiaRC}).
 
 % Rx "GSUP CEAI LU Req" is our way of saying Rx "Swm Diameter-EAP REQ (DER) with EAP AVP containing successuful auth":
 tx_auth_compl_request(Imsi, Apn) ->
@@ -94,6 +102,11 @@ handle_call({epdg_auth_req, Imsi, PdpTypeNr, Apn, EAP}, {Pid, _Tag} = _From, Sta
 	{_Sess, State1} = find_or_new_swm_session(Imsi, Pid, State0),
 	ok = aaa_diameter_swm:rx_auth_request(Imsi, PdpTypeNr, Apn, EAP),
 	{reply, ok, State1};
+
+handle_call({raa, Imsi, DiaRC}, _From, State) ->
+	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
+	aaa_diameter_swm:rx_reauth_answer(Imsi, DiaRC#epdg_dia_rc.result_code),
+	{reply, ok, State};
 
 handle_call({epdg_auth_compl_req, Imsi, Apn}, _From, State) ->
 	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
@@ -148,6 +161,25 @@ handle_cast({epdg_auth_compl_resp, Imsi, Result}, State) ->
 	end,
 	{noreply, State};
 
+handle_cast({rar, Imsi}, State) ->
+	Sess = find_swm_session_by_imsi(Imsi, State),
+	case Sess of
+	#swm_session{imsi = Imsi} ->
+		case epdg_ue_fsm:received_swm_reauth_request(Sess#swm_session.pid) of
+		ok ->
+			DiaResultCode = 2001, %% SUCCESS
+			aaa_diameter_swm:rx_reauth_answer(Imsi, DiaResultCode);
+		_ ->
+			DiaResultCode = 5012, %% UNABLE_TO_COMPLY
+			aaa_diameter_swm:rx_reauth_answer(Imsi, DiaResultCode)
+		end;
+	undefined ->
+		lager:notice("SWm Rx AAR: unknown swm-session ~p", [Imsi]),
+		DiaResultCode = 5002, %% UNKNOWN_SESSION_ID
+		aaa_diameter_swm:rx_reauth_answer(Imsi, DiaResultCode)
+	end,
+	{noreply, State};
+
 handle_cast({sta, Imsi, Result}, State) ->
 	Sess = find_swm_session_by_imsi(Imsi, State),
 	case Sess of
@@ -184,6 +216,10 @@ code_change(_OldVsn, State, _Extra) ->
 
 terminate(Reason, _S) ->
 	lager:info("terminating ~p with reason ~p~n", [?MODULE, Reason]).
+
+%% Emulation from the wire (DIAMETER SWm), called from internal AAA Server:
+rx_reauth_request(Imsi) ->
+	ok = gen_server:cast(?SERVER, {rar, Imsi}).
 
 %% Emulation from the wire (DIAMETER SWm), called from internal AAA Server:
 rx_auth_response(Imsi, Result) ->

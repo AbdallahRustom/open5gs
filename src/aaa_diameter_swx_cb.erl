@@ -81,14 +81,8 @@ handle_request(#diameter_packet{msg = Req, errors = []}, _SvcName, {_, Caps}) wh
            'Non-3GPP-User-Data' = N3UAopt} = Req,
     case aaa_ue_fsm:get_pid_by_imsi(Imsi) of
         Pid when is_pid(Pid) ->
-            _PGWAddresses = parse_pgw_addr_from_N3UA(N3UAopt),
-            %% TODO: in successful case, we want to validate how this prcoedure extends to other interfaces:
-            %% """ 3GPP TS 29.273 8.1.2.3.3:
-            %% After a successful user profile download, the 3GPP AAA Server shall
-            %% initiate re-authentication procedure as described
-            %% in clause 7.2.2.4 if the subscriber has previously been authenticated
-            %% and authorized to untrusted non-3GPP access.
-            %% """
+            PGWAddresses = parse_pgw_addr_from_N3UA(N3UAopt),
+            aaa_ue_fsm:ev_rx_swx_ppr(Pid, {PGWAddresses}),
             Res = 2001, %% Success
             ERes = [];
         undefined ->

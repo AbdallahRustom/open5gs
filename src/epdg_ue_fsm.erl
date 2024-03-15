@@ -44,7 +44,7 @@
 -export([get_server_name_by_imsi/1, get_pid_by_imsi/1]).
 -export([auth_request/2, lu_request/1, tunnel_request/2, purge_ms_request/1,
          cancel_location_result/1]).
--export([received_swm_auth_response/2, received_swm_auth_compl_response/2,
+-export([received_swm_reauth_request/1, received_swm_auth_response/2, received_swm_auth_compl_response/2,
          received_swm_session_termination_answer/2, received_swm_abort_session_request/1]).
 -export([received_gtpc_create_session_response/2, received_gtpc_delete_session_response/2, received_gtpc_delete_bearer_request/1]).
 -export([state_new/3,
@@ -132,6 +132,15 @@ cancel_location_result(Pid) ->
         lager:info("ue_fsm cancel_location_result~n", []),
         try
                 gen_statem:call(Pid, cancel_location_result)
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
+
+received_swm_reauth_request(Pid) ->
+        lager:info("ue_fsm received_swm_reauth_request~n", []),
+        try
+        gen_statem:call(Pid, received_swm_reauth_request)
         catch
         exit:Err ->
                 {error, Err}
@@ -327,6 +336,18 @@ state_authenticated({call, From}, {tunnel_request, PCO}, Data) ->
                                          Data#ue_fsm_data.pgw_rem_addr_list),
         {next_state, state_wait_create_session_resp, Data, [{reply,From,ok}]};
 
+state_authenticated({call, From}, received_swm_reauth_request, Data) ->
+        lager:info("ue_fsm state_authenticated event=received_swm_reauth_request, ~p~n", [Data]),
+        % TODO: 3GPP TS 29.273  7.1.2.5.1:
+        % Upon receiving the re-authorization request, the ePDG shall immediately invoke the authorization procedure
+        % specified in 7.1.2.2 for the session indicated in the request. This procedure is based on the Diameter
+        % commands AA-Request (AAR) and AA-Answer (AAA) specified in IETF RFC 4005 [4]. Information
+        % element contents for these messages are shown in tables 7.1.2.2.1/1 and 7.1.2.2.1/2.
+        %
+        % This is done synchronously for now when returning from call:
+        %%epdg_diameter_swm:tx_reauth_answer(Data#ue_fsm_data.imsi, #epdg_dia_rc{result_code = 2001}),
+        {keep_state, Data, [{reply,From,ok}]};
+
 state_authenticated({call, From}, purge_ms_request, Data) ->
         lager:info("ue_fsm state_authenticated event=purge_ms_request, ~p~n", [Data]),
         Data1 = Data#ue_fsm_data{tear_down_gsup_needed = true},
@@ -395,6 +416,18 @@ state_active({call, _From}, {auth_request, PdpTypeNr, Apn, EAP}, Data) ->
         gtp_u_tun:delete_pdp_context(Data#ue_fsm_data.tun_pdp_ctx),
         Data1 = Data#ue_fsm_data{tun_pdp_ctx = undefined},
         {next_state, state_new, Data1, [postpone]};
+
+state_active({call, From}, received_swm_reauth_request, Data) ->
+        lager:info("ue_fsm state_active event=received_swm_reauth_request, ~p~n", [Data]),
+        % TODO: 3GPP TS 29.273  7.1.2.5.1:
+        % Upon receiving the re-authorization request, the ePDG shall immediately invoke the authorization procedure
+        % specified in 7.1.2.2 for the session indicated in the request. This procedure is based on the Diameter
+        % commands AA-Request (AAR) and AA-Answer (AAA) specified in IETF RFC 4005 [4]. Information
+        % element contents for these messages are shown in tables 7.1.2.2.1/1 and 7.1.2.2.1/2.
+        %
+        % This is done synchronously for now when returning from call:
+        %%epdg_diameter_swm:tx_reauth_answer(Data#ue_fsm_data.imsi, #epdg_dia_rc{result_code = 2001}),
+        {keep_state, Data, [{reply,From,ok}]};
 
 state_active({call, From}, purge_ms_request, Data) ->
         lager:info("ue_fsm state_active event=purge_ms_request, ~p~n", [Data]),
