@@ -64,13 +64,13 @@ handle_cast({epdg_auth_req, Imsi, PdpTypeNr, Apn, EAP}, State) ->
 		undefined -> {ok, Pid} = aaa_ue_fsm:start(Imsi);
 		Pid -> Pid
 	end,
-	aaa_ue_fsm:ev_swm_auth_req(Pid, {PdpTypeNr, Apn, EAP}),
+	aaa_ue_fsm:ev_rx_swm_auth_req(Pid, {PdpTypeNr, Apn, EAP}),
 	{noreply, State};
 
 handle_cast({epdg_auth_compl_req, Imsi, Apn}, State) ->
 	case aaa_ue_fsm:get_pid_by_imsi(Imsi) of
 	Pid when is_pid(Pid) ->
-		aaa_ue_fsm:ev_swm_auth_compl(Pid, Apn);
+		aaa_ue_fsm:ev_rx_swm_auth_compl(Pid, Apn);
 	undefined ->
 		RC_USER_UNKNOWN=5030,
 		epdg_diameter_swm:rx_auth_compl_response(Imsi, {error, RC_USER_UNKNOWN})

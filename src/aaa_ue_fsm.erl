@@ -42,7 +42,7 @@
 -export([start/1, stop/1]).
 -export([init/1,callback_mode/0,terminate/3]).
 -export([get_server_name_by_imsi/1, get_pid_by_imsi/1]).
--export([ev_swm_auth_req/2, ev_swm_auth_compl/2, ev_rx_swm_str/1, ev_rx_swm_asa/1,
+-export([ev_rx_swm_auth_req/2, ev_rx_swm_auth_compl/2, ev_rx_swm_str/1, ev_rx_swm_asa/1,
          ev_rx_swx_maa/2, ev_rx_swx_saa/2, ev_rx_swx_rtr/1,
          ev_rx_s6b_aar/2, ev_rx_s6b_str/1, ev_rx_s6b_asa/2]).
 -export([state_new/3,
@@ -86,19 +86,19 @@ stop(SrvRef) ->
                 {error, Err}
         end.
 
-ev_swm_auth_req(Pid, {PdpTypeNr, Apn, EAP}) ->
-        lager:info("ue_fsm ev_swm_auth_req~n", []),
+ev_rx_swm_auth_req(Pid, {PdpTypeNr, Apn, EAP}) ->
+        lager:info("ue_fsm ev_rx_swm_auth_req~n", []),
         try
-                gen_statem:call(Pid, {swm_auth_req, PdpTypeNr, Apn, EAP})
+                gen_statem:call(Pid, {rx_swm_auth_req, PdpTypeNr, Apn, EAP})
         catch
         exit:Err ->
                 {error, Err}
         end.
 
-ev_swm_auth_compl(Pid, Apn) ->
-        lager:info("ue_fsm ev_swm_auth_compl~n", []),
+ev_rx_swm_auth_compl(Pid, Apn) ->
+        lager:info("ue_fsm ev_rx_swm_auth_compl~n", []),
         try
-                gen_statem:call(Pid, {swm_auth_compl, Apn})
+                gen_statem:call(Pid, {rx_swm_auth_compl, Apn})
         catch
         exit:Err ->
                 {error, Err}
@@ -203,8 +203,8 @@ terminate(Reason, State, Data) ->
 state_new(enter, _OldState, Data) ->
         {keep_state, Data};
 
-state_new({call, From}, {swm_auth_req, PdpTypeNr, Apn, EAP}, Data) ->
-        lager:info("ue_fsm state_new event=swm_auth_req {~p, ~p, ~p}, ~p~n", [PdpTypeNr, Apn, EAP, Data]),
+state_new({call, From}, {rx_swm_auth_req, PdpTypeNr, Apn, EAP}, Data) ->
+        lager:info("ue_fsm state_new event=rx_swm_auth_req {~p, ~p, ~p}, ~p~n", [PdpTypeNr, Apn, EAP, Data]),
         case maps:find(authorization, EAP) of
         {ok, Authorization} when is_binary(Authorization) -> Authorization;
         error -> Authorization = []
@@ -214,8 +214,8 @@ state_new({call, From}, {swm_auth_req, PdpTypeNr, Apn, EAP}, Data) ->
         {error, Err} -> {keep_state, Data, [{reply,From,{error, Err}}]}
         end;
 
-state_new({call, From}, {swm_auth_compl, Apn}, Data) ->
-        lager:info("ue_fsm state_new event=swm_auth_compl, ~p~n", [Data]),
+state_new({call, From}, {rx_swm_auth_compl, Apn}, Data) ->
+        lager:info("ue_fsm state_new event=rx_swm_auth_compl, ~p~n", [Data]),
         case aaa_diameter_swx:server_assignment_request(Data#ue_fsm_data.imsi, 1, Apn, []) of
         ok -> {next_state, state_wait_swx_saa, Data, [{reply,From,ok}]};
         {error, Err} -> {keep_state, Data, [{reply,From,{error, Err}}]}
@@ -314,8 +314,8 @@ state_authenticated({call, {Pid, _Tag} = From}, rx_s6b_str, Data) ->
                 end
         end;
 
-state_authenticated({call, _From}, {swm_auth_req, PdpTypeNr, Apn, EAP}, Data) ->
-        lager:info("ue_fsm state_authenticated event=swm_auth_req {~p, ~p, ~p}, ~p~n", [PdpTypeNr, Apn, EAP, Data]),
+state_authenticated({call, _From}, {rx_swm_auth_req, PdpTypeNr, Apn, EAP}, Data) ->
+        lager:info("ue_fsm state_authenticated event=rx_swm_auth_req {~p, ~p, ~p}, ~p~n", [PdpTypeNr, Apn, EAP, Data]),
         {next_state, state_new, Data, [postpone]};
 
 state_authenticated({call, From}, rx_swx_rtr, Data) ->
