@@ -154,7 +154,7 @@
 		{ Auth-Application-Id }
 		{ Re-Auth-Request-Type }
 		[ User-Name ]
-		[RAR-Flags ]
+		[ RAR-Flags ]
 		*[ AVP ]
 
 ;; 9.2.2.6.2 Re-Auth-Answer (RAA)
