@@ -196,6 +196,10 @@ terminate(Reason, State, Data) ->
         lager:info("terminating ~p with reason ~p state=~p, ~p~n", [?MODULE, Reason, State, Data]),
         ok.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% state_new:
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 state_new(enter, _OldState, Data) ->
         {keep_state, Data};
 
@@ -217,6 +221,10 @@ state_new({call, From}, {swm_auth_compl, Apn}, Data) ->
         {error, Err} -> {keep_state, Data, [{reply,From,{error, Err}}]}
         end.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% state_wait_swx_maa:
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 state_wait_swx_maa(enter, _OldState, Data) ->
         {keep_state, Data};
 
@@ -224,6 +232,10 @@ state_wait_swx_maa({call, From}, {rx_swx_maa, Result}, Data) ->
         lager:info("ue_fsm state_wait_swx_maa event=rx_swx_maa, ~p~n", [Data]),
         aaa_diameter_swm:auth_response(Data#ue_fsm_data.imsi, Result),
         {next_state, state_new, Data, [{reply,From,ok}]}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% state_wait_swx_saa:
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 state_wait_swx_saa(enter, _OldState, Data) ->
         {keep_state, Data};
@@ -238,6 +250,10 @@ state_wait_swx_saa({call, From}, {rx_swx_saa, Result}, Data) ->
                 aaa_diameter_swm:auth_compl_response(Data#ue_fsm_data.imsi, {ok, ResInfo}),
                 {next_state, state_authenticated, Data, [{reply,From,ok}]}
         end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% state_authenticated:
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 state_authenticated(enter, _OldState, Data) ->
         % Mark ePDG session as active:
@@ -313,6 +329,10 @@ state_authenticated({call, From}, Ev, Data) ->
         lager:info("ue_fsm state_authenticated: Unexpected call event ~p, ~p~n", [Ev, Data]),
         {keep_state, Data, [{reply,From,ok}]}.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% state_authenticated_wait_swx_saa:
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 state_authenticated_wait_swx_saa(enter, _OldState, Data) ->
         {keep_state, Data};
 
@@ -340,8 +360,12 @@ state_authenticated_wait_swx_saa({call, From}, {rx_swx_saa, Result}, Data) ->
                 end
         end.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% state_dereg_net_initiated_wait_s6b_asa:
 %% HSS asked us to do deregistration towards the user.
 %% Transmit S6b ASR towards PGW and wait for ASA back.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 state_dereg_net_initiated_wait_s6b_asa(enter, _OldState, Data) ->
         aaa_diameter_s6b:tx_as_request(Data#ue_fsm_data.nai),
         {keep_state, Data, {state_timeout,?TIMEOUT_VAL_WAIT_S6b_ANSWER,s6b_asa_timeout}};
@@ -356,8 +380,12 @@ state_dereg_net_initiated_wait_s6b_asa({call, From}, Ev, Data) ->
 state_dereg_net_initiated_wait_s6b_asa(state_timeout, s6b_asa_timeout, Data) ->
         {next_state, state_dereg_net_initiated_wait_swm_asa, Data}.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% state_dereg_net_initiated_wait_s6b_asa:
 %% HSS asked us to do deregistration towards the user.
 %% S6b (PGW) was already torn down. Now transmit SWm ASR towards ePDG and wait for ASA back.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 state_dereg_net_initiated_wait_swm_asa(enter, _OldState, Data) ->
         aaa_diameter_swm:tx_as_request(Data#ue_fsm_data.imsi),
         {keep_state, Data, {state_timeout,?TIMEOUT_VAL_WAIT_SWm_ANSWER,swm_asa_timeout}};
