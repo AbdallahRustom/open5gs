@@ -43,7 +43,7 @@ tx_der_auth_request(Imsi, PdpTypeNr, Apn, EAP) ->
 	% PdpTypeNr: SWm Diameter AVP "UE-Local-IP-Address"
 	% Apn: SWm Diameter AVP "Service-Selection"
 	% EAP: SWm Diameter AVP EAP-Payload
-	Result = gen_server:call(?SERVER, {der_auth_req, ImsiStr, PdpTypeNr, Apn, EAP}),
+	Result = gen_server:call(?SERVER, {tx_dia, {der_auth_req, ImsiStr, PdpTypeNr, Apn, EAP}}),
 	case Result of
 		{ok, _AuthTuples} ->
 			epdg_ue_fsm:received_swm_dea_auth_response(self(), Result),
@@ -54,13 +54,13 @@ tx_der_auth_request(Imsi, PdpTypeNr, Apn, EAP) ->
 tx_reauth_answer(Imsi, DiaRC) ->
 	% In Diameter we use Imsi as strings, as done by diameter module.
 	ImsiStr = binary_to_list(Imsi),
-	_Result = gen_server:call(?SERVER, {raa, ImsiStr, DiaRC}).
+	_Result = gen_server:call(?SERVER, {tx_dia, {raa, ImsiStr, DiaRC}}).
 
 % Rx "GSUP CEAI LU Req" is our way of saying Rx "Swm Diameter-EAP REQ (DER) with EAP AVP containing successuful auth":
 tx_der_auth_compl_request(Imsi, Apn) ->
 	% In Diameter we use Imsi as strings, as done by diameter module.
 	ImsiStr = binary_to_list(Imsi),
-	Result = gen_server:call(?SERVER, {der_auth_compl_req, ImsiStr, Apn}),
+	Result = gen_server:call(?SERVER, {tx_dia, {der_auth_compl_req, ImsiStr, Apn}}),
 	case Result of
 		{ok, _Mar} ->
 			epdg_ue_fsm:received_swm_dea_auth_compl_response(self(), Result),
@@ -72,7 +72,7 @@ tx_der_auth_compl_request(Imsi, Apn) ->
 tx_session_termination_request(Imsi) ->
 	% In Diameter we use Imsi as strings, as done by diameter module.
 	ImsiStr = binary_to_list(Imsi),
-	Result = gen_server:call(?SERVER, {str, ImsiStr}),
+	Result = gen_server:call(?SERVER, {tx_dia, {str, ImsiStr}}),
 	case Result of
 		{ok, _Mar} ->
 			epdg_ue_fsm:received_swm_session_terminate_answer(self(), Result),
@@ -84,39 +84,61 @@ tx_session_termination_request(Imsi) ->
 tx_abort_session_answer(Imsi) ->
 	% In Diameter we use Imsi as strings, as done by diameter module.
 	ImsiStr = binary_to_list(Imsi),
-	Result = gen_server:call(?SERVER, {asa, ImsiStr}),
+	Result = gen_server:call(?SERVER, {tx_dia, {asa, ImsiStr}}),
 	case Result of
 		{ok, _Mar} ->
 			ok;
 		_ -> Result
 	end.
 
-handle_call({der_auth_req, Imsi, PdpTypeNr, Apn, EAP}, _From, State) ->
+%% Emulation from the wire (DIAMETER SWm), called from internal AAA Server:
+rx_reauth_request(Imsi) ->
+	ok = gen_server:cast(?SERVER, {rx_dia, {rar, Imsi}}).
+
+%% Emulation from the wire (DIAMETER SWm), called from internal AAA Server:
+rx_dea_auth_response(Imsi, Result) ->
+	ok = gen_server:cast(?SERVER, {rx_dia, {dea_auth_resp, Imsi, Result}}).
+
+%Rx Swm Diameter-EAP Answer (DEA) containing APN-Configuration, triggered by
+%earlier Tx DER EAP AVP containing successuful auth":
+rx_dea_auth_compl_response(Imsi, Result) ->
+	ok = gen_server:cast(?SERVER, {rx_dia, {dea_auth_compl_resp, Imsi, Result}}).
+
+% Rx SWm Diameter STA:
+rx_session_termination_answer(Imsi, Result) ->
+	ok = gen_server:cast(?SERVER, {rx_dia, {sta, Imsi, Result}}).
+
+% Rx SWm Diameter ASR:
+rx_abort_session_request(Imsi) ->
+	ok = gen_server:cast(?SERVER, {rx_dia, {asr, Imsi}}).
+
+handle_call({tx_dia, {der_auth_req, Imsi, PdpTypeNr, Apn, EAP}}, _From, State) ->
 	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
 	ok = aaa_diameter_swm:rx_der_auth_request(Imsi, PdpTypeNr, Apn, EAP),
 	{reply, ok, State};
 
-handle_call({raa, Imsi, DiaRC}, _From, State) ->
+handle_call({tx_dia, {raa, Imsi, DiaRC}}, _From, State) ->
 	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
 	aaa_diameter_swm:rx_reauth_answer(Imsi, DiaRC#epdg_dia_rc.result_code),
 	{reply, ok, State};
 
-handle_call({der_auth_compl_req, Imsi, Apn}, _From, State) ->
+handle_call({tx_dia, {der_auth_compl_req, Imsi, Apn}}, _From, State) ->
 	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
 	Reply = aaa_diameter_swm:rx_der_auth_compl_request(Imsi, Apn),
 	{reply, Reply, State};
 
-handle_call({str, Imsi}, _From, State) ->
+handle_call({tx_dia, {str, Imsi}}, _From, State) ->
 	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
 	Reply = aaa_diameter_swm:rx_session_termination_request(Imsi),
 	{reply, Reply, State};
 
-handle_call({asa, Imsi}, _From, State) ->
+handle_call({tx_dia, {asa, Imsi}}, _From, State) ->
 	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
 	Reply = aaa_diameter_swm:rx_abort_session_answer(Imsi),
 	{reply, Reply, State}.
 
-handle_cast({dea_auth_resp, ImsiStr, Result}, State) ->
+
+handle_cast({rx_dia, {dea_auth_resp, ImsiStr, Result}}, State) ->
 	Imsi = list_to_binary(ImsiStr),
 	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
 	Pid when is_pid(Pid) ->
@@ -126,7 +148,7 @@ handle_cast({dea_auth_resp, ImsiStr, Result}, State) ->
 	end,
 	{noreply, State};
 
-handle_cast({dea_auth_compl_resp, ImsiStr, Result}, State) ->
+handle_cast({rx_dia, {dea_auth_compl_resp, ImsiStr, Result}}, State) ->
 	Imsi = list_to_binary(ImsiStr),
 	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
 	Pid when is_pid(Pid) ->
@@ -136,7 +158,7 @@ handle_cast({dea_auth_compl_resp, ImsiStr, Result}, State) ->
 	end,
 	{noreply, State};
 
-handle_cast({rar, ImsiStr}, State) ->
+handle_cast({rx_dia, {rar, ImsiStr}}, State) ->
 	Imsi = list_to_binary(ImsiStr),
 	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
 	Pid when is_pid(Pid) ->
@@ -155,7 +177,7 @@ handle_cast({rar, ImsiStr}, State) ->
 	end,
 	{noreply, State};
 
-handle_cast({sta, ImsiStr, Result}, State) ->
+handle_cast({rx_dia, {sta, ImsiStr, Result}}, State) ->
 	Imsi = list_to_binary(ImsiStr),
 	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
 	Pid when is_pid(Pid) ->
@@ -165,7 +187,7 @@ handle_cast({sta, ImsiStr, Result}, State) ->
 	end,
 	{noreply, State};
 
-handle_cast({asr, ImsiStr}, State) ->
+handle_cast({rx_dia, {asr, ImsiStr}}, State) ->
 	Imsi = list_to_binary(ImsiStr),
 	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
 	Pid when is_pid(Pid) ->
@@ -191,27 +213,6 @@ code_change(_OldVsn, State, _Extra) ->
 
 terminate(Reason, _S) ->
 	lager:info("terminating ~p with reason ~p~n", [?MODULE, Reason]).
-
-%% Emulation from the wire (DIAMETER SWm), called from internal AAA Server:
-rx_reauth_request(Imsi) ->
-	ok = gen_server:cast(?SERVER, {rar, Imsi}).
-
-%% Emulation from the wire (DIAMETER SWm), called from internal AAA Server:
-rx_dea_auth_response(Imsi, Result) ->
-	ok = gen_server:cast(?SERVER, {dea_auth_resp, Imsi, Result}).
-
-%Rx Swm Diameter-EAP Answer (DEA) containing APN-Configuration, triggered by
-%earlier Tx DER EAP AVP containing successuful auth":
-rx_dea_auth_compl_response(Imsi, Result) ->
-	ok = gen_server:cast(?SERVER, {dea_auth_compl_resp, Imsi, Result}).
-
-% Rx SWm Diameter STA:
-rx_session_termination_answer(Imsi, Result) ->
-	ok = gen_server:cast(?SERVER, {sta, Imsi, Result}).
-
-% Rx SWm Diameter ASR:
-rx_abort_session_request(Imsi) ->
-	ok = gen_server:cast(?SERVER, {asr, Imsi}).
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
