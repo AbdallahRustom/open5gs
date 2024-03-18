@@ -174,7 +174,7 @@ handle_cast({rar, Imsi}, State) ->
 			aaa_diameter_swm:rx_reauth_answer(Imsi, DiaResultCode)
 		end;
 	undefined ->
-		lager:notice("SWm Rx AAR: unknown swm-session ~p", [Imsi]),
+		lager:notice("SWm Rx RAR: unknown swm-session ~p", [Imsi]),
 		DiaResultCode = 5002, %% UNKNOWN_SESSION_ID
 		aaa_diameter_swm:rx_reauth_answer(Imsi, DiaResultCode)
 	end,
