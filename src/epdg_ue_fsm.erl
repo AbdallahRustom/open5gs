@@ -61,6 +61,7 @@
 
 -define(TIMEOUT_VAL_WAIT_GTP_ANSWER, 10000).
 -define(TIMEOUT_VAL_WAIT_GSUP_ANSWER, 10000).
+-define(TIMEOUT_VAL_WAIT_SWm_ANSWER, 10000).
 
 -record(ue_fsm_data, {
         imsi,
@@ -215,10 +216,8 @@ received_gtpc_delete_bearer_request(Pid) ->
 %% ------------------------------------------------------------------
 
 ev_handle({call, From}, {auth_request, PdpTypeNr, Apn, EAP}, Data) ->
-        case epdg_diameter_swm:tx_der_auth_request(Data#ue_fsm_data.imsi, PdpTypeNr, Apn, EAP) of
-        ok -> {next_state, state_wait_auth_resp, Data, [{reply,From,ok}]};
-        {error, Err} -> {stop_and_reply, Err, [{reply,From,{error,Err}}], Data}
-	end.
+        epdg_diameter_swm:tx_der_auth_request(Data#ue_fsm_data.imsi, PdpTypeNr, Apn, EAP),
+        {next_state, state_wait_auth_resp, Data, [{reply,From,ok}]}.
 
 %% ------------------------------------------------------------------
 %% gen_statem Function Definitions
@@ -260,7 +259,7 @@ state_new({call, From}, purge_ms_request, Data) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 state_wait_auth_resp(enter, _OldState, Data) ->
-        {keep_state, Data};
+        {keep_state, Data, {state_timeout,?TIMEOUT_VAL_WAIT_SWm_ANSWER,swm_der_timeout}};
 
 state_wait_auth_resp({call, From}, {received_swm_dea_auth_response, Result}, Data) ->
         lager:info("ue_fsm state_wait_auth_resp event=received_swm_dea_auth_response Result=~p, ~p~n", [Result, Data]),
@@ -274,7 +273,13 @@ state_wait_auth_resp({call, From}, {received_swm_dea_auth_response, Result}, Dat
                         {next_state, state_new, Data, [{reply,From,ok}]};
                 _ ->
                         {next_state, state_new, Data, [{reply,From,{error,unknown}}]}
-        end.
+        end;
+
+state_wait_auth_resp(state_timeout, swm_der_timeout, Data) ->
+        lager:error("ue_fsm state_wait_auth_resp: Timeout ~p, ~p~n", [swm_der_timeout, Data]),
+        GsupCause = ?GSUP_CAUSE_NET_FAIL,
+        gsup_server:auth_response(Data#ue_fsm_data.imsi, {error, GsupCause}),
+        {next_state, state_new, Data}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% state_authenticating:
@@ -290,10 +295,8 @@ state_authenticating({call, _From} = EvType, {auth_request, PdpTypeNr, Apn, EAP}
 state_authenticating({call, From}, lu_request, Data) ->
         lager:info("ue_fsm state_authenticating event=lu_request, ~p~n", [Data]),
         % Rx "GSUP CEAI LU Req" is our way of saying Rx "Swm Diameter-EAP REQ (DER) with EAP AVP containing successuful auth":
-        case epdg_diameter_swm:tx_der_auth_compl_request(Data#ue_fsm_data.imsi, Data#ue_fsm_data.apn) of
-        ok -> {keep_state, Data, [{reply,From,ok}]};
-        {error, Err} -> {stop_and_reply, Err, [{reply,From,{error,Err}}], Data}
-        end;
+        epdg_diameter_swm:tx_der_auth_compl_request(Data#ue_fsm_data.imsi, Data#ue_fsm_data.apn),
+        {keep_state, Data, [{reply,From,ok}]};
 
 % Rx Swm Diameter-EAP Answer (DEA) containing APN-Configuration, triggered by
 % earlier Tx DER EAP AVP containing successuful auth", when we received GSUP LU Req:
@@ -517,15 +520,8 @@ state_wait_swm_session_termination_answer(enter, _OldState, Data) ->
         % Send STR towards AAA-Server
         % % 3GPP TS 29.273 7.1.2.3
         lager:info("ue_fsm state_wait_swm_session_termination_answer event=enter, ~p~n", [Data]),
-        case epdg_diameter_swm:tx_session_termination_request(Data#ue_fsm_data.imsi) of
-        ok -> {keep_state, Data};
-        {error, _Err} ->
-                case Data#ue_fsm_data.tear_down_gsup_needed of
-                true -> gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, {error, ?GSUP_CAUSE_NET_FAIL});
-                false -> ok
-                end,
-                {keep_state, Data}
-        end;
+        epdg_diameter_swm:tx_session_termination_request(Data#ue_fsm_data.imsi),
+        {keep_state, Data, {state_timeout,?TIMEOUT_VAL_WAIT_SWm_ANSWER,swm_str_timeout}};
 
 state_wait_swm_session_termination_answer({call, From}, {received_swm_sta, DiaRC}, Data) ->
         lager:info("ue_fsm state_wait_swm_session_termination_answer event=received_swm_sta, ~p~n", [Data]),
@@ -542,7 +538,14 @@ state_wait_swm_session_termination_answer({call, From}, {received_swm_sta, DiaRC
 
 state_wait_swm_session_termination_answer({call, From}, Event, Data) ->
         lager:error("ue_fsm state_wait_swm_session_termination_answer: Unexpected call event ~p, ~p~n", [Event, Data]),
-        {keep_state, Data, [{reply,From,{error,unexpected_event}}]}.
+        {keep_state, Data, [{reply,From,{error,unexpected_event}}]};
+
+state_wait_swm_session_termination_answer(state_timeout, swm_str_timeout, Data) ->
+        case Data#ue_fsm_data.tear_down_gsup_needed of
+        true -> gsup_server:purge_ms_response(Data#ue_fsm_data.imsi, {error, ?GSUP_CAUSE_NET_FAIL});
+        false -> ok
+        end,
+        {stop, normal}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% state_dereg_net_initiated_wait_cancel_location_res:
