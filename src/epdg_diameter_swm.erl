@@ -8,13 +8,7 @@
 -include("conv.hrl").
 
 -record(swm_state, {
-	sessions = sets:new()
 }).
-
--record(swm_session, {
-	imsi                   :: string(),
-	pid                    :: pid()
-    }).
 
 -export([start_link/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
@@ -97,11 +91,10 @@ tx_abort_session_answer(Imsi) ->
 		_ -> Result
 	end.
 
-handle_call({epdg_auth_req, Imsi, PdpTypeNr, Apn, EAP}, {Pid, _Tag} = _From, State0) ->
+handle_call({epdg_auth_req, Imsi, PdpTypeNr, Apn, EAP}, _From, State) ->
 	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
-	{_Sess, State1} = find_or_new_swm_session(Imsi, Pid, State0),
 	ok = aaa_diameter_swm:rx_auth_request(Imsi, PdpTypeNr, Apn, EAP),
-	{reply, ok, State1};
+	{reply, ok, State};
 
 handle_call({raa, Imsi, DiaRC}, _From, State) ->
 	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
@@ -110,91 +103,73 @@ handle_call({raa, Imsi, DiaRC}, _From, State) ->
 
 handle_call({epdg_auth_compl_req, Imsi, Apn}, _From, State) ->
 	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
-	Sess = find_swm_session_by_imsi(Imsi, State),
-	case Sess of
-	#swm_session{imsi = Imsi} ->
-		Reply = aaa_diameter_swm:rx_auth_compl_request(Imsi, Apn);
-	undefined ->
-		Reply = {error,unknown_imsi}
-	end,
+	Reply = aaa_diameter_swm:rx_auth_compl_request(Imsi, Apn),
 	{reply, Reply, State};
 
 handle_call({str, Imsi}, _From, State) ->
 	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
-	Sess = find_swm_session_by_imsi(Imsi, State),
-	case Sess of
-	#swm_session{imsi = Imsi} ->
-		Reply = aaa_diameter_swm:rx_session_termination_request(Imsi);
-	undefined ->
-		Reply = {error,unknown_imsi}
-	end,
+	Reply = aaa_diameter_swm:rx_session_termination_request(Imsi),
 	{reply, Reply, State};
 
 handle_call({asa, Imsi}, _From, State) ->
 	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
-	Sess = find_swm_session_by_imsi(Imsi, State),
-	case Sess of
-	#swm_session{imsi = Imsi} ->
-		Reply = aaa_diameter_swm:rx_abort_session_answer(Imsi);
-	undefined ->
-		Reply = {error,unknown_imsi}
-	end,
+	Reply = aaa_diameter_swm:rx_abort_session_answer(Imsi),
 	{reply, Reply, State}.
 
-handle_cast({epdg_auth_resp, Imsi, Result}, State) ->
-	Sess = find_swm_session_by_imsi(Imsi, State),
-	case Sess of
-	#swm_session{imsi = Imsi} ->
-		epdg_ue_fsm:received_swm_auth_response(Sess#swm_session.pid, Result);
+handle_cast({epdg_auth_resp, ImsiStr, Result}, State) ->
+	Imsi = list_to_binary(ImsiStr),
+	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
+	Pid when is_pid(Pid) ->
+		epdg_ue_fsm:received_swm_auth_response(Pid, Result);
 	undefined ->
 		error_logger:error_report(["unknown swm_session", {module, ?MODULE}, {imsi, Imsi}, {state, State}])
 	end,
 	{noreply, State};
 
-handle_cast({epdg_auth_compl_resp, Imsi, Result}, State) ->
-	Sess = find_swm_session_by_imsi(Imsi, State),
-	case Sess of
-	#swm_session{imsi = Imsi} ->
-		epdg_ue_fsm:received_swm_auth_compl_response(Sess#swm_session.pid, Result);
+handle_cast({epdg_auth_compl_resp, ImsiStr, Result}, State) ->
+	Imsi = list_to_binary(ImsiStr),
+	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
+	Pid when is_pid(Pid) ->
+		epdg_ue_fsm:received_swm_auth_compl_response(Pid, Result);
 	undefined ->
 		error_logger:error_report(["unknown swm_session", {module, ?MODULE}, {imsi, Imsi}, {state, State}])
 	end,
 	{noreply, State};
 
-handle_cast({rar, Imsi}, State) ->
-	Sess = find_swm_session_by_imsi(Imsi, State),
-	case Sess of
-	#swm_session{imsi = Imsi} ->
-		case epdg_ue_fsm:received_swm_reauth_request(Sess#swm_session.pid) of
+handle_cast({rar, ImsiStr}, State) ->
+	Imsi = list_to_binary(ImsiStr),
+	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
+	Pid when is_pid(Pid) ->
+		case epdg_ue_fsm:received_swm_reauth_request(Pid) of
 		ok ->
 			DiaResultCode = 2001, %% SUCCESS
-			aaa_diameter_swm:rx_reauth_answer(Imsi, DiaResultCode);
+			aaa_diameter_swm:rx_reauth_answer(ImsiStr, DiaResultCode);
 		_ ->
 			DiaResultCode = 5012, %% UNABLE_TO_COMPLY
-			aaa_diameter_swm:rx_reauth_answer(Imsi, DiaResultCode)
+			aaa_diameter_swm:rx_reauth_answer(ImsiStr, DiaResultCode)
 		end;
 	undefined ->
 		lager:notice("SWm Rx RAR: unknown swm-session ~p", [Imsi]),
 		DiaResultCode = 5002, %% UNKNOWN_SESSION_ID
-		aaa_diameter_swm:rx_reauth_answer(Imsi, DiaResultCode)
+		aaa_diameter_swm:rx_reauth_answer(ImsiStr, DiaResultCode)
 	end,
 	{noreply, State};
 
-handle_cast({sta, Imsi, Result}, State) ->
-	Sess = find_swm_session_by_imsi(Imsi, State),
-	case Sess of
-	#swm_session{imsi = Imsi} ->
-		epdg_ue_fsm:received_swm_session_termination_answer(Sess#swm_session.pid, Result);
+handle_cast({sta, ImsiStr, Result}, State) ->
+	Imsi = list_to_binary(ImsiStr),
+	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
+	Pid when is_pid(Pid) ->
+		epdg_ue_fsm:received_swm_session_termination_answer(Pid, Result);
 	undefined ->
 		error_logger:error_report(["unknown swm_session", {module, ?MODULE}, {imsi, Imsi}, {state, State}])
 	end,
 	{noreply, State};
 
-handle_cast({asr, Imsi}, State) ->
-	Sess = find_swm_session_by_imsi(Imsi, State),
-	case Sess of
-	#swm_session{imsi = Imsi} ->
-		epdg_ue_fsm:received_swm_abort_session_request(Sess#swm_session.pid);
+handle_cast({asr, ImsiStr}, State) ->
+	Imsi = list_to_binary(ImsiStr),
+	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
+	Pid when is_pid(Pid) ->
+		epdg_ue_fsm:received_swm_abort_session_request(Pid);
 	undefined ->
 		error_logger:error_report(["unknown swm_session", {module, ?MODULE}, {imsi, Imsi}, {state, State}])
 	end,
@@ -241,37 +216,3 @@ rx_abort_session_request(Imsi) ->
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
-
-new_swm_session(Imsi, Pid, State) ->
-	Sess = #swm_session{imsi = Imsi,
-	    pid = Pid
-	},
-	NewSt = State#swm_state{sessions = sets:add_element(Sess, State#swm_state.sessions)},
-	{Sess, NewSt}.
-
-% returns Sess if found, undefined it not
-find_swm_session_by_imsi(Imsi, State) ->
-	{Imsi, Res} = sets:fold(
-		fun(SessIt = #swm_session{imsi = LookupImsi}, {LookupImsi, _AccIn}) -> {LookupImsi, SessIt};
-		(_, AccIn) -> AccIn
-		end,
-		{Imsi, undefined},
-		State#swm_state.sessions),
-	Res.
-
-find_or_new_swm_session(Imsi, Pid, State) ->
-	Sess = find_swm_session_by_imsi(Imsi, State),
-	case Sess of
-		#swm_session{imsi = Imsi} ->
-		% Update Pid since it may have changed:
-		Sess1 = Sess#swm_session{pid = Pid},
-		State1 = update_swm_session(Sess, Sess1, State),
-		{Sess1, State1};
-		undefined ->
-		new_swm_session(Imsi, Pid, State)
-	end.
-
-update_swm_session(OldSess, NewSess, State) ->
-	SetRemoved = sets:del_element(OldSess, State#swm_state.sessions),
-	SetUpdated = sets:add_element(NewSess, SetRemoved),
-	State#swm_state{sessions = SetUpdated}.
