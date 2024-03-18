@@ -44,7 +44,7 @@
 -export([get_server_name_by_imsi/1, get_pid_by_imsi/1]).
 -export([auth_request/2, lu_request/1, tunnel_request/2, purge_ms_request/1,
          cancel_location_result/1]).
--export([received_swm_reauth_request/1, received_swm_auth_response/2, received_swm_auth_compl_response/2,
+-export([received_swm_reauth_request/1, received_swm_dea_auth_response/2, received_swm_dea_auth_compl_response/2,
          received_swm_session_termination_answer/2, received_swm_abort_session_request/1]).
 -export([received_gtpc_create_session_response/2, received_gtpc_delete_session_response/2, received_gtpc_delete_bearer_request/1]).
 -export([state_new/3,
@@ -146,19 +146,19 @@ received_swm_reauth_request(Pid) ->
                 {error, Err}
         end.
 
-received_swm_auth_response(Pid, Result) ->
-        lager:info("ue_fsm received_swm_auth_response ~p~n", [Result]),
+received_swm_dea_auth_response(Pid, Result) ->
+        lager:info("ue_fsm received_swm_dea_auth_response ~p~n", [Result]),
         try
-        gen_statem:call(Pid, {received_swm_auth_response, Result})
+        gen_statem:call(Pid, {received_swm_dea_auth_response, Result})
         catch
         exit:Err ->
                 {error, Err}
         end.
 
-received_swm_auth_compl_response(Pid, Result) ->
-        lager:info("ue_fsm received_swm_auth_compl_response ~p~n", [Result]),
+received_swm_dea_auth_compl_response(Pid, Result) ->
+        lager:info("ue_fsm received_swm_dea_auth_compl_response ~p~n", [Result]),
         try
-        gen_statem:call(Pid, {received_swm_auth_compl_response, Result})
+        gen_statem:call(Pid, {received_swm_dea_auth_compl_response, Result})
         catch
         exit:Err ->
                 {error, Err}
@@ -215,7 +215,7 @@ received_gtpc_delete_bearer_request(Pid) ->
 %% ------------------------------------------------------------------
 
 ev_handle({call, From}, {auth_request, PdpTypeNr, Apn, EAP}, Data) ->
-        case epdg_diameter_swm:tx_auth_request(Data#ue_fsm_data.imsi, PdpTypeNr, Apn, EAP) of
+        case epdg_diameter_swm:tx_der_auth_request(Data#ue_fsm_data.imsi, PdpTypeNr, Apn, EAP) of
         ok -> {next_state, state_wait_auth_resp, Data, [{reply,From,ok}]};
         {error, Err} -> {stop_and_reply, Err, [{reply,From,{error,Err}}], Data}
 	end.
@@ -262,8 +262,8 @@ state_new({call, From}, purge_ms_request, Data) ->
 state_wait_auth_resp(enter, _OldState, Data) ->
         {keep_state, Data};
 
-state_wait_auth_resp({call, From}, {received_swm_auth_response, Result}, Data) ->
-        lager:info("ue_fsm state_wait_auth_resp event=received_swm_auth_response Result=~p, ~p~n", [Result, Data]),
+state_wait_auth_resp({call, From}, {received_swm_dea_auth_response, Result}, Data) ->
+        lager:info("ue_fsm state_wait_auth_resp event=received_swm_dea_auth_response Result=~p, ~p~n", [Result, Data]),
         case Result of
                 {ok, _AuthTuples} ->
                         gsup_server:auth_response(Data#ue_fsm_data.imsi, Result),
@@ -290,14 +290,14 @@ state_authenticating({call, _From} = EvType, {auth_request, PdpTypeNr, Apn, EAP}
 state_authenticating({call, From}, lu_request, Data) ->
         lager:info("ue_fsm state_authenticating event=lu_request, ~p~n", [Data]),
         % Rx "GSUP CEAI LU Req" is our way of saying Rx "Swm Diameter-EAP REQ (DER) with EAP AVP containing successuful auth":
-        case epdg_diameter_swm:tx_auth_compl_request(Data#ue_fsm_data.imsi, Data#ue_fsm_data.apn) of
+        case epdg_diameter_swm:tx_der_auth_compl_request(Data#ue_fsm_data.imsi, Data#ue_fsm_data.apn) of
         ok -> {keep_state, Data, [{reply,From,ok}]};
         {error, Err} -> {stop_and_reply, Err, [{reply,From,{error,Err}}], Data}
         end;
 
 % Rx Swm Diameter-EAP Answer (DEA) containing APN-Configuration, triggered by
 % earlier Tx DER EAP AVP containing successuful auth", when we received GSUP LU Req:
-state_authenticating({call, From}, {received_swm_auth_compl_response, Result}, Data) ->
+state_authenticating({call, From}, {received_swm_dea_auth_compl_response, Result}, Data) ->
         lager:info("ue_fsm state_authenticating event=lu_request, ~p, ~p~n", [Result, Data]),
         % Rx "GSUP CEAI LU Req" is our way of saying Rx "Swm Diameter-EAP REQ (DER) with EAP AVP containing successuful auth":
         case Result of
