@@ -17,6 +17,7 @@
 -export([rx_der_auth_request/4,
 	 rx_der_auth_compl_request/2,
 	 rx_reauth_answer/2,
+	 rx_auth_request/1,
 	 rx_session_termination_request/1,
 	 rx_abort_session_answer/1]).
 -export([tx_dea_auth_response/2,
@@ -65,6 +66,10 @@ rx_der_auth_compl_request(Imsi, Apn) ->
 rx_reauth_answer(Imsi, Result) ->
 	gen_server:cast(?SERVER, {raa, Imsi, Result}).
 
+% 3GPP TS 29.273 7.2.2.1.3 Diameter-AA-Request (AAR) Command
+rx_auth_request(Imsi) ->
+	gen_server:cast(?SERVER, {aar, Imsi}).
+
 rx_session_termination_request(Imsi) ->
 	gen_server:cast(?SERVER, {str, Imsi}).
 
@@ -95,6 +100,22 @@ handle_cast({raa, Imsi, Result}, State) ->
 	case aaa_ue_fsm:get_pid_by_imsi(Imsi) of
 	Pid when is_pid(Pid) -> aaa_ue_fsm:ev_rx_swm_reauth_answer(Pid, Result);
 	undefined -> ok
+	end,
+	{noreply, State};
+
+handle_cast({aar, Imsi}, State) ->
+	case aaa_ue_fsm:get_pid_by_imsi(Imsi) of
+	Pid when is_pid(Pid) ->
+		case aaa_ue_fsm:ev_rx_swm_auth_request(Pid) of
+		ok ->
+			epdg_diameter_swm:rx_auth_answer(Imsi, ok);
+		_ ->
+			RC_UNABLE_TO_COMPLY=5012,
+			epdg_diameter_swm:rx_auth_answer(Imsi, {error, RC_UNABLE_TO_COMPLY})
+		end;
+	undefined ->
+		RC_USER_UNKNOWN=5030,
+		epdg_diameter_swm:rx_auth_answer(Imsi, {error, RC_USER_UNKNOWN})
 	end,
 	{noreply, State};
 

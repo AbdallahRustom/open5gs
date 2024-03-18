@@ -15,13 +15,15 @@
 -export([code_change/3, terminate/2]).
 
 -export([tx_der_auth_request/4,
-	 tx_reauth_answer/2,
 	 tx_der_auth_compl_request/2,
+	 tx_reauth_answer/2,
+	 tx_auth_req/1,
 	 tx_session_termination_request/1,
 	 tx_abort_session_answer/1]).
 -export([rx_dea_auth_response/2,
 	 rx_dea_auth_compl_response/2,
 	 rx_reauth_request/1,
+	 rx_auth_answer/2,
 	 rx_session_termination_answer/2,
 	 rx_abort_session_request/1]).
 
@@ -56,6 +58,12 @@ tx_der_auth_compl_request(Imsi, Apn) ->
 	ImsiStr = binary_to_list(Imsi),
 	ok = gen_server:cast(?SERVER, {tx_dia, {der_auth_compl_req, ImsiStr, Apn}}).
 
+% 3GPP TS 29.273 7.1.2.2
+tx_auth_req(Imsi) ->
+	% In Diameter we use Imsi as strings, as done by diameter module.
+	ImsiStr = binary_to_list(Imsi),
+	ok = gen_server:cast(?SERVER, {tx_dia, {aar, ImsiStr}}).
+
 % 3GPP TS 29.273 7.1.2.3
 tx_session_termination_request(Imsi) ->
 	% In Diameter we use Imsi as strings, as done by diameter module.
@@ -71,6 +79,10 @@ tx_abort_session_answer(Imsi) ->
 %% Emulation from the wire (DIAMETER SWm), called from internal AAA Server:
 rx_reauth_request(Imsi) ->
 	ok = gen_server:cast(?SERVER, {rx_dia, {rar, Imsi}}).
+
+%% Emulation from the wire (DIAMETER SWm), called from internal AAA Server:
+rx_auth_answer(Imsi, Result) ->
+	ok = gen_server:cast(?SERVER, {rx_dia, {aaa, Imsi, Result}}).
 
 %% Emulation from the wire (DIAMETER SWm), called from internal AAA Server:
 rx_dea_auth_response(Imsi, Result) ->
@@ -113,6 +125,12 @@ handle_cast({tx_dia, {der_auth_compl_req, Imsi, Apn}}, State) ->
 	aaa_diameter_swm:rx_der_auth_compl_request(Imsi, Apn),
 	{noreply, State};
 
+% 3GPP TS 29.273 7.2.2.1.3 Diameter-AA-Request (AAR) Command
+handle_cast({tx_dia, {aar, Imsi}}, State) ->
+	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
+	aaa_diameter_swm:rx_auth_request(Imsi),
+	{noreply, State};
+
 handle_cast({tx_dia, {str, Imsi}}, State) ->
 	% we yet don't implement the Diameter SWm interface on the wire, we process the call internally:
 	aaa_diameter_swm:rx_session_termination_request(Imsi),
@@ -152,6 +170,16 @@ handle_cast({rx_dia, {rar, ImsiStr}}, State) ->
 		lager:notice("SWm Rx RAR: unknown swm-session ~p", [Imsi]),
 		DiaResultCode = 5002, %% UNKNOWN_SESSION_ID
 		aaa_diameter_swm:rx_reauth_answer(ImsiStr, DiaResultCode)
+	end,
+	{noreply, State};
+
+handle_cast({rx_dia, {aaa, ImsiStr, Result}}, State) ->
+	Imsi = list_to_binary(ImsiStr),
+	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
+	Pid when is_pid(Pid) ->
+		epdg_ue_fsm:received_swm_auth_answer(Pid, Result);
+	undefined ->
+		lager:notice("SWm Rx RAR: unknown swm-session ~p", [Imsi])
 	end,
 	{noreply, State};
 

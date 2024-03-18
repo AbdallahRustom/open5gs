@@ -44,7 +44,8 @@
 -export([get_server_name_by_imsi/1, get_pid_by_imsi/1]).
 -export([auth_request/2, lu_request/1, tunnel_request/2, purge_ms_request/1,
          cancel_location_result/1]).
--export([received_swm_reauth_request/1, received_swm_dea_auth_response/2, received_swm_dea_auth_compl_response/2,
+-export([received_swm_reauth_request/1, received_swm_dea_auth_response/2,
+         received_swm_dea_auth_compl_response/2, received_swm_auth_answer/2,
          received_swm_session_termination_answer/2, received_swm_abort_session_request/1]).
 -export([received_gtpc_create_session_response/2, received_gtpc_delete_session_response/2, received_gtpc_delete_bearer_request/1]).
 -export([state_new/3,
@@ -69,7 +70,9 @@
         pgw_rem_addr_list       = []            :: list(),
         tun_pdp_ctx                             :: epdg_tun_pdp_ctx,
         tear_down_gsup_needed   = false         :: boolean(), %% need to send GSUP PurgeMSResp after STR+STA?
-        tear_down_gsup_cause    = 0             :: integer()
+        tear_down_gsup_cause    = 0             :: integer(),
+        tear_down_s2b_needed    = false         :: boolean(), %% need to send S2b DeleteSessionReq
+        tear_down_tx_swm_asa_needed = false         :: boolean() %% need to send SWm ASA
         }).
 
 get_server_name_by_imsi(Imsi) ->
@@ -146,6 +149,15 @@ received_swm_reauth_request(Pid) ->
         exit:Err ->
                 {error, Err}
         end.
+
+received_swm_auth_answer(Pid, Result) ->
+lager:info("ue_fsm received_swm_auth_answer~n", []),
+try
+gen_statem:call(Pid, {received_swm_auth_answer, Result})
+catch
+exit:Err ->
+        {error, Err}
+end.
 
 received_swm_dea_auth_response(Pid, Result) ->
         lager:info("ue_fsm received_swm_dea_auth_response ~p~n", [Result]),
@@ -342,12 +354,25 @@ state_authenticated({call, From}, {tunnel_request, PCO}, Data) ->
 state_authenticated({call, From}, received_swm_reauth_request, Data) ->
         lager:info("ue_fsm state_authenticated event=received_swm_reauth_request, ~p~n", [Data]),
         epdg_diameter_swm:tx_reauth_answer(Data#ue_fsm_data.imsi, #epdg_dia_rc{result_code = 2001}),
-        % TODO: 3GPP TS 29.273  7.1.2.5.1:
+        % 3GPP TS 29.273 7.1.2.5.1:
         % Upon receiving the re-authorization request, the ePDG shall immediately invoke the authorization procedure
         % specified in 7.1.2.2 for the session indicated in the request. This procedure is based on the Diameter
         % commands AA-Request (AAR) and AA-Answer (AAA) specified in IETF RFC 4005 [4]. Information
         % element contents for these messages are shown in tables 7.1.2.2.1/1 and 7.1.2.2.1/2.
+        epdg_diameter_swm:tx_auth_req(Data#ue_fsm_data.imsi),
         {keep_state, Data, [{reply,From,ok}]};
+
+
+state_authenticated({call, From}, {received_swm_auth_answer, Result}, Data) ->
+        lager:info("ue_fsm state_authenticated event=received_swm_auth_answer(~p), ~p~n", [Result, Data]),
+        case Result of
+        ok ->
+                {keep_state, Data, [{reply,From,ok}]};
+        _ ->
+                Data1 = Data#ue_fsm_data{tear_down_gsup_needed = false,
+                                         tear_down_s2b_needed = false},
+                {next_state, state_dereg_net_initiated_wait_cancel_location_res, Data1, [{reply,From,ok}]}
+        end;
 
 state_authenticated({call, From}, purge_ms_request, Data) ->
         lager:info("ue_fsm state_authenticated event=purge_ms_request, ~p~n", [Data]),
@@ -397,7 +422,7 @@ state_wait_create_session_resp({call, From}, {received_gtpc_create_session_respo
         end;
 
 state_wait_create_session_resp({call, From}, Event, Data) ->
-        lager:error("ue_fsm state_wait_delete_session_resp: Unexpected call event ~p, ~p~n", [Event, Data]),
+        lager:error("ue_fsm state_wait_create_session_resp: Unexpected call event ~p, ~p~n", [Event, Data]),
         {keep_state, Data, [{reply,From,{error,unexpected_event}}]};
 
 state_wait_create_session_resp(state_timeout, create_session_timeout, Data) ->
@@ -421,12 +446,27 @@ state_active({call, _From}, {auth_request, PdpTypeNr, Apn, EAP}, Data) ->
 state_active({call, From}, received_swm_reauth_request, Data) ->
         lager:info("ue_fsm state_active event=received_swm_reauth_request, ~p~n", [Data]),
         epdg_diameter_swm:tx_reauth_answer(Data#ue_fsm_data.imsi, #epdg_dia_rc{result_code = 2001}),
-        % TODO: 3GPP TS 29.273  7.1.2.5.1:
+        % 3GPP TS 29.273 7.1.2.5.1:
         % Upon receiving the re-authorization request, the ePDG shall immediately invoke the authorization procedure
         % specified in 7.1.2.2 for the session indicated in the request. This procedure is based on the Diameter
         % commands AA-Request (AAR) and AA-Answer (AAA) specified in IETF RFC 4005 [4]. Information
         % element contents for these messages are shown in tables 7.1.2.2.1/1 and 7.1.2.2.1/2.
+        epdg_diameter_swm:tx_auth_req(Data#ue_fsm_data.imsi),
         {keep_state, Data, [{reply,From,ok}]};
+
+state_active({call, From}, {received_swm_auth_answer, Result}, Data) ->
+        lager:info("ue_fsm state_active event=received_swm_auth_answer(~p), ~p~n", [Result, Data]),
+        case Result of
+        ok ->
+                {keep_state, Data, [{reply,From,ok}]};
+        _ ->
+                gtp_u_tun:delete_pdp_context(Data#ue_fsm_data.tun_pdp_ctx),
+                Data1 = Data#ue_fsm_data{tun_pdp_ctx = undefined,
+                                         tear_down_gsup_needed = false,
+                                         tear_down_s2b_needed = true,
+                                         tear_down_tx_swm_asa_needed = false},
+                {next_state, state_dereg_net_initiated_wait_cancel_location_res, Data1, [{reply,From,ok}]}
+        end;
 
 state_active({call, From}, purge_ms_request, Data) ->
         lager:info("ue_fsm state_active event=purge_ms_request, ~p~n", [Data]),
@@ -440,14 +480,20 @@ state_active({call, From}, purge_ms_request, Data) ->
 state_active({call, From}, received_gtpc_delete_bearer_request, Data) ->
         lager:info("ue_fsm state_active event=received_gtpc_delete_bearer_request, ~p~n", [Data]),
         gtp_u_tun:delete_pdp_context(Data#ue_fsm_data.tun_pdp_ctx),
-        Data1 = Data#ue_fsm_data{tun_pdp_ctx = undefined, tear_down_gsup_needed = false},
+        Data1 = Data#ue_fsm_data{tun_pdp_ctx = undefined,
+                                 tear_down_gsup_needed = false,
+                                 tear_down_s2b_needed = false,
+                                 tear_down_tx_swm_asa_needed = false},
         {next_state, state_dereg_pgw_initiated_wait_cancel_location_res, Data1, [{reply,From,ok}]};
 
 %%% network (HSS/AAA) initiated de-registation requested:
 state_active({call, From}, received_swm_asr, Data) ->
         lager:info("ue_fsm state_active event=received_swm_asr, ~p~n", [Data]),
         gtp_u_tun:delete_pdp_context(Data#ue_fsm_data.tun_pdp_ctx),
-        Data1 = Data#ue_fsm_data{tun_pdp_ctx = undefined, tear_down_gsup_needed = false},
+        Data1 = Data#ue_fsm_data{tun_pdp_ctx = undefined,
+                                 tear_down_gsup_needed = false,
+                                 tear_down_s2b_needed = true,
+                                 tear_down_tx_swm_asa_needed = true},
         {next_state, state_dereg_net_initiated_wait_cancel_location_res, Data1, [{reply,From,ok}]};
 
 state_active({call, From}, Event, Data) ->
@@ -575,13 +621,26 @@ state_dereg_net_initiated_wait_cancel_location_res(state_timeout, gsup_cancel_lo
 %% have triggered GTPCv1 Delete Session Req against PGW.
 %% Wait for GTPCv1 Delete Session Response, ssend SWm ASA to AAAA and terminate FSM.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+tx_swm_asa_if_needed(Data) ->
+        case Data#ue_fsm_data.tear_down_tx_swm_asa_needed of
+        true ->
+                epdg_diameter_swm:tx_abort_session_answer(Data#ue_fsm_data.imsi);
+        false -> lager:debug("Skip sending SWm ASA", [])
+        end.
+
 state_dereg_net_initiated_wait_s2b_delete_session_resp(enter, _OldState, Data) ->
-        case epdg_gtpc_s2b:delete_session_req(Data#ue_fsm_data.imsi) of
-        ok ->
-                {keep_state, Data, {state_timeout,?TIMEOUT_VAL_WAIT_GTP_ANSWER,s2b_delete_session_timeout}};
-        {error, Err} ->
-                epdg_diameter_swm:tx_abort_session_answer(Data#ue_fsm_data.imsi),
-                {stop, {error,Err}}
+        case Data#ue_fsm_data.tear_down_s2b_needed of
+        true ->
+                case epdg_gtpc_s2b:delete_session_req(Data#ue_fsm_data.imsi) of
+                ok ->
+                        {keep_state, Data, {state_timeout,?TIMEOUT_VAL_WAIT_GTP_ANSWER,s2b_delete_session_timeout}};
+                {error, Err} ->
+                        tx_swm_asa_if_needed(Data),
+                        {stop, {error,Err}}
+                end;
+        false ->
+                tx_swm_asa_if_needed(Data),
+                {stop, normal}
         end;
 
 state_dereg_net_initiated_wait_s2b_delete_session_resp({call, From}, {received_gtpc_delete_session_response, _Resp = #gtp{version = v2, type = delete_session_response, ie = IEs}}, Data) ->
@@ -589,7 +648,7 @@ state_dereg_net_initiated_wait_s2b_delete_session_resp({call, From}, {received_g
         #{{v2_cause,0} := CauseIE} = IEs,
         GtpCause = gtp_utils:enum_v2_cause(CauseIE#v2_cause.v2_cause),
         lager:debug("Cause: GTP_atom=~p -> GTP_int=~p~n", [CauseIE#v2_cause.v2_cause, GtpCause]),
-        epdg_diameter_swm:tx_abort_session_answer(Data#ue_fsm_data.imsi),
+        tx_swm_asa_if_needed(Data),
         {stop_and_reply, normal, [{reply,From,ok}], Data};
 
 state_dereg_net_initiated_wait_s2b_delete_session_resp({call, From}, Event, Data) ->
@@ -599,5 +658,5 @@ state_dereg_net_initiated_wait_s2b_delete_session_resp({call, From}, Event, Data
 
 state_dereg_net_initiated_wait_s2b_delete_session_resp(state_timeout, s2b_delete_session_timeout, Data) ->
         lager:error("ue_fsm state_dereg_net_initiated_wait_s2b_delete_session_resp: Timeout ~p, ~p~n", [s2b_delete_session_timeout, Data]),
-        epdg_diameter_swm:tx_abort_session_answer(Data#ue_fsm_data.imsi),
+        tx_swm_asa_if_needed(Data),
         {stop, normal}.

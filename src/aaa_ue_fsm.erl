@@ -43,7 +43,8 @@
 -export([init/1,callback_mode/0,terminate/3]).
 -export([get_server_name_by_imsi/1, get_pid_by_imsi/1]).
 -export([ev_rx_swm_der_auth_req/2, ev_rx_swm_der_auth_compl/2,
-         ev_rx_swm_reauth_answer/2, ev_rx_swm_str/1, ev_rx_swm_asa/1,
+         ev_rx_swm_reauth_answer/2, ev_rx_swm_auth_request/1,
+         ev_rx_swm_str/1, ev_rx_swm_asa/1,
          ev_rx_swx_maa/2, ev_rx_swx_saa/2, ev_rx_swx_ppr/2, ev_rx_swx_rtr/1,
          ev_rx_s6b_aar/2, ev_rx_s6b_str/1, ev_rx_s6b_raa/2, ev_rx_s6b_asa/2]).
 -export([state_new/3,
@@ -99,6 +100,15 @@ ev_rx_swm_reauth_answer(Pid, Result) ->
         lager:info("ue_fsm ev_rx_swm_reauth_answer~n", []),
         try
                 gen_statem:call(Pid, {rx_swm_reauth_answer, Result})
+        catch
+        exit:Err ->
+                {error, Err}
+        end.
+
+ev_rx_swm_auth_request(Pid) ->
+        lager:info("ue_fsm ev_rx_swm_auth_request~n", []),
+        try
+                gen_statem:call(Pid, rx_swm_auth_request)
         catch
         exit:Err ->
                 {error, Err}
@@ -369,6 +379,11 @@ state_authenticated({call, From}, {rx_swx_ppr, _PGWAddresses}, Data) ->
 state_authenticated({call, From}, {rx_swm_reauth_answer, Result}, Data) ->
         lager:info("ue_fsm state_authenticated event=rx_swm_reauth_answer ~p, ~p~n", [Result, Data]),
         %% SWx PPA was already answered immediately when PPR was received, nothing to do here.
+        {keep_state, Data, [{reply,From,ok}]};
+
+state_authenticated({call, From}, rx_swm_auth_request, Data) ->
+        lager:info("ue_fsm state_authenticated event=rx_swm_auth_request, ~p~n", [Data]),
+        %% answer is trnamsitted when returning ok:
         {keep_state, Data, [{reply,From,ok}]};
 
 state_authenticated({call, From}, {rx_s6b_raa, Result}, Data) ->
