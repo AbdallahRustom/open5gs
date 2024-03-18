@@ -68,7 +68,7 @@
         imsi,
         apn                     = "internet"    :: string(),
         pgw_rem_addr_list       = []            :: list(),
-        tun_pdp_ctx                             :: epdg_tun_pdp_ctx,
+        tun_pdp_ctx                             :: #epdg_tun_pdp_ctx{},
         tear_down_gsup_needed   = false         :: boolean(), %% need to send GSUP PurgeMSResp after STR+STA?
         tear_down_gsup_cause    = 0             :: integer(),
         tear_down_s2b_needed    = false         :: boolean(), %% need to send S2b DeleteSessionReq
