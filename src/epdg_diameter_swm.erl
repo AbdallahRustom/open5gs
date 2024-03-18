@@ -147,14 +147,7 @@ handle_cast({rx_dia, {rar, ImsiStr}}, State) ->
 	Imsi = list_to_binary(ImsiStr),
 	case epdg_ue_fsm:get_pid_by_imsi(Imsi) of
 	Pid when is_pid(Pid) ->
-		case epdg_ue_fsm:received_swm_reauth_request(Pid) of
-		ok ->
-			DiaResultCode = 2001, %% SUCCESS
-			aaa_diameter_swm:rx_reauth_answer(ImsiStr, DiaResultCode);
-		_ ->
-			DiaResultCode = 5012, %% UNABLE_TO_COMPLY
-			aaa_diameter_swm:rx_reauth_answer(ImsiStr, DiaResultCode)
-		end;
+		epdg_ue_fsm:received_swm_reauth_request(Pid);
 	undefined ->
 		lager:notice("SWm Rx RAR: unknown swm-session ~p", [Imsi]),
 		DiaResultCode = 5002, %% UNKNOWN_SESSION_ID

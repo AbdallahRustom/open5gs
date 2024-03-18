@@ -341,14 +341,12 @@ state_authenticated({call, From}, {tunnel_request, PCO}, Data) ->
 
 state_authenticated({call, From}, received_swm_reauth_request, Data) ->
         lager:info("ue_fsm state_authenticated event=received_swm_reauth_request, ~p~n", [Data]),
+        epdg_diameter_swm:tx_reauth_answer(Data#ue_fsm_data.imsi, #epdg_dia_rc{result_code = 2001}),
         % TODO: 3GPP TS 29.273  7.1.2.5.1:
         % Upon receiving the re-authorization request, the ePDG shall immediately invoke the authorization procedure
         % specified in 7.1.2.2 for the session indicated in the request. This procedure is based on the Diameter
         % commands AA-Request (AAR) and AA-Answer (AAA) specified in IETF RFC 4005 [4]. Information
         % element contents for these messages are shown in tables 7.1.2.2.1/1 and 7.1.2.2.1/2.
-        %
-        % This is done synchronously for now when returning from call:
-        %%epdg_diameter_swm:tx_reauth_answer(Data#ue_fsm_data.imsi, #epdg_dia_rc{result_code = 2001}),
         {keep_state, Data, [{reply,From,ok}]};
 
 state_authenticated({call, From}, purge_ms_request, Data) ->
@@ -422,14 +420,12 @@ state_active({call, _From}, {auth_request, PdpTypeNr, Apn, EAP}, Data) ->
 
 state_active({call, From}, received_swm_reauth_request, Data) ->
         lager:info("ue_fsm state_active event=received_swm_reauth_request, ~p~n", [Data]),
+        epdg_diameter_swm:tx_reauth_answer(Data#ue_fsm_data.imsi, #epdg_dia_rc{result_code = 2001}),
         % TODO: 3GPP TS 29.273  7.1.2.5.1:
         % Upon receiving the re-authorization request, the ePDG shall immediately invoke the authorization procedure
         % specified in 7.1.2.2 for the session indicated in the request. This procedure is based on the Diameter
         % commands AA-Request (AAR) and AA-Answer (AAA) specified in IETF RFC 4005 [4]. Information
         % element contents for these messages are shown in tables 7.1.2.2.1/1 and 7.1.2.2.1/2.
-        %
-        % This is done synchronously for now when returning from call:
-        %%epdg_diameter_swm:tx_reauth_answer(Data#ue_fsm_data.imsi, #epdg_dia_rc{result_code = 2001}),
         {keep_state, Data, [{reply,From,ok}]};
 
 state_active({call, From}, purge_ms_request, Data) ->
