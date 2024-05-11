@@ -1,0 +1,14 @@
+:gfdl-enabled:
+:program-name: osmo-epdg
+
+osmo-ePDG User Manual
+=====================
+Alexander Couzens <acouzens@sysmocom.de>
+
+
+include::{commondir}/chapters/preface.adoc[]
+
+include::{srcdir}/chapters/overview.adoc[]
+
+include::{srcdir}/chapters/strongswan.adoc[]
+include::{srcdir}/chapters/osmo-epdg.adoc[]

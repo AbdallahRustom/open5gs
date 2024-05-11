@@ -1,0 +1,96 @@
+[[osmoepdg]]
+== osmo-epdg/erlang
+
+The core component of the osmo-epdg is the osmo-epdg/erlang daemon.
+It holds the state of the UE and communicates with the relevant core components.
+
+[[fig-osmo-epdg-erlang]]
+.osmo-epdg/erlang structure
+[graphviz]
+----
+include::{srcdir}/osmo-epdg-erlang.dot[]
+----
+
+=== Debian packages
+
+For Debian based distributions, Osmocom provides package repositories:
+
+- https://osmocom.org/projects/cellular-infrastructure/wiki/Latest_Builds
+- https://osmocom.org/projects/cellular-infrastructure/wiki/Nightly_Builds
+
+The osmo-epdg package contains a systemd.service file and a default example configuration.
+
+=== Configuration
+
+The osmo-epdg/erlang is configured via Erlang configuration (https://www.erlang.org/doc/man/config.html).
+When using the osmo-epdg debian package, the default location for the configuration is
+*/etc/osmocom/osmo-epdg.config*.
+
+===== CEIA: Connection for strongSwan
+
+The CEIA is the internal protocol between strongSwan and osmo-epdg/erlang.
+See [CEIA]
+
+[format="csv",options="header"]
+|===
+key, default, description
+gsup_local_ip, 127.0.0.1, bind IP of the GSUP server (TCP). strongSwan connects to this IP.
+gsup_local_port, 4222, bind TCP server port
+|===
+
+===== SWx (diameter)
+
+SWx (<<3gpp-ts-29-273>>): Interface between AAA and HSS.
+The AAA will retrieve authentication, authorize the UE and
+update the location (AAA, PGW address) in the HSS.
+
+See Erlang diameter specific behaviour on https://www.erlang.org/doc/man/diameter.html
+
+[format="csv",options="header"]
+|===
+key,default,description
+dia_swx_remote_ip, 127.0.0.1, Remote IP of the HSS
+dia_swx_remote_port, 3868, SCTP port of the HSS
+dia_swx_proto, sctp, Protocol. sctp or tcp
+dia_swx_connect_timer, 30000, Watchdog Connect timer in ms. RFC 6733.dia_swx_watchdog_timer, 30000, Watchdog TwInit. RFC 3539.
+dia_swx_watchdog_config, "[ok, suspect]", See https://www.erlang.org/doc/man/diameter.html
+dia_swx_transmit_timer, 10000, SWx Transmit Timeout (ms)
+dia_swx_vendor_id, 0, Diameter Vendor Id
+dia_swx_origin_host, epdg.localdomain, Diameter Origin Host
+dia_swx_origin_realm, localdomain, Diameter Origin Realm
+|===
+
+===== S6b (diameter)
+
+S6b (<<3gpp-ts-29-273>>): Interface between AAA and PGW.
+Authorize the GTP session of the ePDG.
+
+See Erlang diameter specific behaviour on https://www.erlang.org/doc/man/diameter.html
+
+[format="csv",options="header"]
+|===
+key,default,description
+dia_s6b_local_ip, 127.0.0.10, local bind IP
+dia_s6b_local_port, 3868, local bind Port
+dia_s6b_proto, sctp, Protocol. sctp or tcp
+dia_s6b_connect_timer, 30000, Watchdog Connect timer in ms. RFC 6733.
+dia_s6b_watchdog_timer, 30000, Watchdog TwInit. RFC 3539.
+dia_s6b_watchdog_config, "[ok, suspect]", See https://www.erlang.org/doc/man/diameter.html
+dia_s6b_vendor_id, 0, Diameter Vendor Id
+dia_s6b_origin_host, aaa.localdomain, Diameter Origin Host
+dia_s6b_origin_realm, localdomain, Diameter Origin Realm
+|===
+
+===== S2b (GTPv2)
+
+S2b (<<3gpp-ts-29-273>>): Interface between ePDG and PGW.
+GTP control plane for the UE traffic.
+
+[format="csv",options="header"]
+|===
+key,default,description
+gtpc_local_ip, 127.0.0.2, local bind IP
+gtpc_local_port, 2123, local bind Port
+gtpc_remote_ip, 127.0.0.1, remote IP of the PGW
+gtpc_remote_port, 2123, remote port of the PGW
+|===

@@ -1,0 +1,73 @@
+[[overview]]
+== Overview
+
+This manual should help you getting started with osmo-epdg. It will cover
+aspects of configuring and running the osmo-epdg.
+
+[[intro_overview]]
+=== About osmo-epdg
+
+osmo-epdg is a combined ePDG (Evolved Packet Data Gateway) and AAA (Authorization, Authentication, Accounting).
+The ePDG is used by an UE to connect via an untrusted non-3GPP access network towards the PGW to allow
+VoWifi (Voice over Wifi).
+
+The UE will establish a tunnel using IPSec (IKEv2 and ESP) towards the ePDG (SWu interface).
+The ePDG will authenticate and authorize the UE by using an AAA and will forward the traffic from the UE towards
+a PGW.
+
+[[fig-osmo-epdg-overview]]
+.`osmo-epdg` structure
+[graphviz]
+----
+include::{srcdir}/osmo-epdg-overview.dot[]
+----
+
+The core of the osmo-epdg is the erlang daemon osmo-epdg/erlang.
+It communicates with core components by 3GPP protocols and contains the state of UEs.
+Furthermore, osmo-epdg speaks with strongSwan to handle communication towards UEs.
+Both components communicate over the internal protocol CEIA based on GSUP.
+
+=== Components of the osmo-epdg
+
+The combined osmo-epdg consist of:
+
+* strongSwan (IKEv2/ESP)
+* osmo-epdg/erlang (state handling, communication with other core components)
+* Linux kernel (policy routing, firewall, gtp, esp for user-plane traffic)
+
+==== strongSwan
+
+strongSwan is a FOSS IPSec daemon developed by the strongSwan community.
+strongSwan has been extended and modified to allow the osmo-epdg/erlang component to
+control UE sessions, pass authentication, authorisation and configuration.
+
+See <<strongswan>> for further information.
+
+===== Interfaces of strongSwan
+
+* SWu: IPsec/IKEv2 towards the UE.
+* netlink: with the Linux kernel to encrypt and decrypt ESP traffic.
+* CEIA: internal communication to osmo-epdg/erlang to forward authentication and state based on GSUP.
+
+==== osmo-epdg/erlang
+
+The osmo-epdg/erlang daemon is the core of the combined ePDG and AAA.
+It communicates to all relevant core components and control UE sessions of the strongSwan over the CEIA protocol.
+
+===== Interfaces of osmo-epdg/erlang
+
+* SWx: with HSS for authentication, authorisation, accounting (AAA)
+* S2b: with PGW to create GTP session (ePDG)
+* S6b: with PGW for authorisation of a GTP session (AAA)
+* netlink: with the Linux kernel to create GTP tunnels (ePDG)
+* CEIA: internal communication to osmo-epdg/erlang to forward authentication and state based on GSUP. (ePDG/AAA)
+
+==== Relevant specifications
+
+- [[[3gpp-ts-23-402]]] 3GPP TS 23.402 Architecture enhancements for non-3GPP accesses
+- [[[3gpp-ts-24-302]]] 3GPP TS 24.302 Architecture enhancements for non-3GPP accesses
+- [[[3gpp-ts-29-273]]] 3GPP TS 29.273: 3GPP EPS AAA interfaces
+- [[[3gpp-ts-20-274]]] 3GPP TS 29.274: Tunnelling Protocol for Control plane (GTPv2-C)
+- [[[3gpp-ts-33-402]]] 3GPP TS 33.402: Security aspects of non-3GPP accesses
+- [[[ieft-rfc-4555]]] IETF RFC 4555: IKEv2 Mobility and Multihoming Protocol (MOBIKE)
+- [[[ieft-rfc-5996]]] IETF RFC 5996: Internet Key Exchange Protocol Version 2 (IKEv2)

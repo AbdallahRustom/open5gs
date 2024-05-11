@@ -1,0 +1,35 @@
+# UE/ePDG/AAA/HSS/PGW
+msc {
+  hscale = 2;
+  UE, ePDG [label="osmo-epdg (ePDG/AAA)"], HSS, PGW;
+
+  UE => ePDG [ label="IKE SA INIT" ];
+  UE <= ePDG [ label="IKE SA INIT" ];
+
+  UE => ePDG [ label="IKE Auth Req (IDi=APN, IDr=NAI); TS; CFG (P-CSCF, IP, DNS)" ];
+  ePDG => HSS [ label="SWx Multimedia Auth Request (APN, NAI)" ];
+  ePDG <= HSS [ label="SWx Multimedia Auth Answer (APN, NAI)" ];
+  UE <= ePDG [ label="IKE Auth Resp (EAP AKA: Autn, Rand)" ];
+  UE => ePDG [ label="IKE Auth Req (EAP AKA: Res)" ];
+
+  ePDG => HSS [ label="SWx Server Assignment Request (APN, NAI)"];
+  ePDG <= HSS [ label="SWx Server Assignment Answer (APN, NAI)"];
+  UE <= ePDG [ label="IKE Auth Resp (EAP: Success)" ];
+
+--- [ label="UE authenticated" ];
+
+  UE => ePDG [ label="IKE Auth Req" ];
+
+  ePDG => PGW [ label="S2b Create Session Request (PCO: P-CSCF, IP, DNS)" ];
+  ePDG <= PGW [ label="S6b Authentication/Authorization Request" ];
+
+  ePDG => HSS [ label="SWx Server Assignment Request (APN, NAI)"];
+  ePDG <= HSS [ label="SWx Server Assignment Answer (APN, NAI)"];
+
+  ePDG => PGW [ label="S6b Authentication/Authorization Answer" ];
+  ePDG <= PGW [ label="S2b Create Session Answer (PCO: P-CSCF, IP, DNS)" ];
+
+  UE <= ePDG [ label="IKE Auth Resp" ];
+
+--- [ label="Tunnel established" ];
+}

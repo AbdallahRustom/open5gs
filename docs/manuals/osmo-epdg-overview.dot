@@ -1,0 +1,32 @@
+digraph G {
+  node [shape=rect];
+  rankdir=LR;
+
+  eUE;
+
+  subgraph cluster1 {
+    color=blue;
+    label="osmo-epdg (combined ePDG/AAA)";
+
+    { rank=same; strongswan; osmoepdg;}
+    osmoepdg [label="osmo-epdg/erlang"];
+  }
+
+  subgraph cluster2 {
+    rankdir=LR;
+    label="epc";
+
+    { rank=same; HSS; PGW; PCRF; }
+    PCRF -> PGW [dir="both"];
+  }
+
+  eUE -> strongswan [label="SWu (ePDG)", dir="both"];
+  strongswan -> osmoepdg [label="CEIA/GSUP", dir="both"];
+  osmoepdg -> HSS [label="SWx (AAA)", dir="both"];
+  osmoepdg -> PGW [label="S2b (ePDG)", dir="both", weight=100];
+  PGW -> ims [label="IPv4/IPv6", dir="both"];
+  PGW -> osmoepdg [label="S6b (AAA)", dir="both"];
+
+  eUE -> ims [label="IPv4/IPv6 (tunnel)", style=dotted, weight=-1];
+}
+

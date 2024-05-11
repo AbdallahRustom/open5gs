@@ -1,0 +1,46 @@
+[[strongswan]]
+== strongSwan
+
+strongSwan is a free software implementation of IPsec, it is developed
+by the strongSwan community.
+strongSwan has been extended and modified to allow the osmo-epdg/erlang component to
+control UE sessions, pass authentication, authorisation and configuration.
+
+The modified strongSwan can be found at https://gitea.osmocom.org/ims-volte-vowifi/strongswan
+
+Example configuration for strongSwan can be found under https://gitea.osmocom.org/ims-volte-vowifi/ansible-prototype
+
+=== Concept of strongSwan within osmo-epdg
+
+The main role of strongSwan in the osmo-epdg is terminating SWu traffic (IKEv2 and ESP) of UEs.
+strongSwan will also handle EAP traffic, as part of an AAA component.
+The osmo-epdg/erlang component is the core of the osmo-epdg and the primary source of the truth.
+For this reason strongSwan should keep as little state as possible while osmo-epdg/erlang keeps the full state.
+
+strongSwan/osmo-epdg and osmo-epdg/erlang communicates via the CEIA (Charon External AKA Interface)
+and share state over it. Authentication, authorisation, configuration are communicated
+over the CEIA.
+
+In the default configuration of osmo-epdg, strongSwan will use Linux kernel to handle ESP to
+achieve high performance on the user-plane.
+The Linux kernel will decrypt, decapsulate and forward traffic towards GTP tunnels.
+
+=== CEIA (Charon External AKA Interface)
+
+The Charon External AKA interface is used by strongSwan/osmo-epdg to communicate
+with osmo-epdg/erlang.
+It is based on GSUP (https://ftp.osmocom.org/docs/osmo-hlr/master/osmohlr-usermanual.pdf).
+
+strongSwan/osmo-epdg is using the CEAI to:
+
+- Authenticate UEs
+- Authorize UEs
+- Prepare user plane to forward traffic
+- Notify about termination of UEs
+- Terminate UE sessions request by HSS (SWu)
+
+The initial connection of GSUP is done by strongSwan (client) towards
+the osmo-epdg/erlang (server).
+The protocol is re-using already defined PDU and messages of GSUP.
+The default configuration will use TCP/IPA port 4222.
+

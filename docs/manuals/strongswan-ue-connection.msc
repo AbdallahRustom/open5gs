@@ -1,0 +1,31 @@
+msc {
+  hscale = 2;
+  UE,
+  sswan [label="strongSwan"],
+  ePDG [label="osmo-epdg/erlang"],
+  PGW,
+  HSS;
+
+  UE <=> sswan [label="IKE: SA_INIT"];
+  UE => sswan [label="IKE: AUTH_REQ (IDi=NAI, IDr=APN, CFG Req)"];
+  sswan => ePDG [label="GSUP: Send Auth Information Req (NAI, APN)"];
+  ePDG => HSS [label="SWx MAR (Multimedia Authentication Request)"];
+  ePDG <= HSS [label="SWx MAA (Multimedia Authentication Answer)"];
+  sswan <= ePDG [label="GSUP: Send Auth Information Res (Quintlet)"];
+  UE <= sswan [label="IKE: AUTH_RESP (EAP-Request/AKA-Challenge)"];
+  UE => sswan [label="IKE: AUTH_REQ (EAP-Request/AKA-Response)"];
+  sswan => ePDG [label="GSUP: Location Update Req"];
+  ePDG => HSS [label="SWx SAR (Server Assignment Request)"];
+  ePDG <= HSS [label="SWx SAA (Server Assignment Answer)"];
+  sswan <= ePDG [label="GSUP: Location Update Res"];
+  UE <= sswan [label="IKE: AUTH_RESP (EAP Success)"];
+  UE => sswan [label="IKE: AUTH_REQ"];
+    sswan => ePDG [label="GSUP: Tunnel Req"];
+    ePDG => PGW [label="S2b: Create Session Request"];
+      ePDG => HSS [label="SWx SAR (Server Assignment Request)"];
+      ePDG <= HSS [label="SWx SAA (Server Assignment Answer)"];
+    ePDG <= PGW [label="S2b: Create Session Answer"];
+    sswan <= ePDG [label="GSUP: Tunnel Res"];
+  UE <= sswan [label="IKE: AUTH_RESP (CFG Reply)"];
+  UE <=> sswan [label="IPSEC SA"];
+}
