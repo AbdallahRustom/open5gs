@@ -1,0 +1,47 @@
+[[operating]]
+== Operating osmo-epdg
+
+The osmo-epdg requires to run on Linux.
+osmo-epdg has been tested and developed with Debian 12.
+Linux kernel and/or erlang/OTP from Debian 11 are known to cause problems.
+
+=== Linux requirements
+
+The osmo-epdg is using the following Linux subsystems:
+
+* nftables (soft)
+* IP policy routing (soft)
+* ESP user-plane (soft)
+* GTP user-plane (hard)
+
+Soft dependencies can be changed by configuration.
+Hard dependencies are required and can't be changed without code changes.
+
+The user-plane is configured in the default configuration to use nftables and
+policy routing to ensure the traffic from UEs will only flow between the GTP network
+interface and ESP encrypted tunnels.
+
+strongSwan will use the kernel ESP subsystem to encrypt, decrypt and route traffic.
+strongSwan can be configured to replace the kernel ESP subsystem with a user space
+imeplementation, which comes with a performance impact.
+
+osmo-epdg/erlang is using the GTP subsystem to de- and encapsulate. It only supports using
+the kernel subsystem.
+
+=== EPC requirements
+
+The osmo-epdg was tested and developed against open5gs and requires version 2.7.1 or newer.
+
+==== HSS
+
+When a UE connects it requests an APN via SWu. By default the UE will request
+the APN "ims". The subscriber entry must allow connections to the requested APN to succeed.
+
+==== PGW
+
+The osmo-epdg/erlang expects the PGW to support S2b and S6b.
+An UE will request attributes via IKEv2 which are translated into Additional PCO (APCO) in GTP on the S2b
+reference point. The PGW should support Additional PCO via S2b.
+open5gs supports Additional PCO since 2.7.1.
+
+osmo-epdg only supports S2b over GTP.
