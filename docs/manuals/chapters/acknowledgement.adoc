@@ -1,0 +1,9 @@
+[[acknowledgement]]
+== Acknowledgement
+
+=== NLNet User-Operated Internet Fund
+
+osmo-epdg was funded by NLNet https://nlnet.nl/project/Osmocom-ePDG/ under the
+User-Operated Internet Fund.
+
+Thank you for sponsoring this project.

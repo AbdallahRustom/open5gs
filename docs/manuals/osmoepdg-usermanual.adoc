@@ -14,3 +14,5 @@ include::{srcdir}/chapters/strongswan.adoc[]
 include::{srcdir}/chapters/osmo-epdg.adoc[]
 
 include::{srcdir}/chapters/operating.adoc[]
+
+include::{srcdir}/chapters/acknowledgement.adoc[]
