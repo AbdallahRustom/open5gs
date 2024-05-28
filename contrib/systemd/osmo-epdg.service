@@ -6,10 +6,10 @@ Wants=network-online.target
 [Service]
 Type=simple
 Restart=always
-WorkingDirectory=/var/lib/osmo-epdg
+StateDirectory=osmo-epdg
+WorkingDirectory=%S/osmo-epdg
 Environment="ERL_FLAGS=-config /etc/osmocom/osmo-epdg.config"
 ExecStartPre=-/usr/bin/ip link del gtp0
-ExecStartPre=/usr/bin/mkdir -p /var/lib/osmo-epdg
 ExecStart=/usr/bin/osmo-epdg
 RestartSec=2
 
