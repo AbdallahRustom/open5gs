@@ -8,10 +8,14 @@ Type=simple
 Restart=always
 StateDirectory=osmo-epdg
 WorkingDirectory=%S/osmo-epdg
+User=osmocom
+Group=osmocom
 Environment="ERL_FLAGS=-config /etc/osmocom/osmo-epdg.config"
 ExecStartPre=-/usr/bin/ip link del gtp0
 ExecStart=/usr/bin/osmo-epdg
 RestartSec=2
+# For setting up the gtp device
+AmbientCapabilities=CAP_NET_ADMIN
 
 [Install]
 WantedBy=multi-user.target
