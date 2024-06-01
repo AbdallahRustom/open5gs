@@ -27,7 +27,7 @@ specifically the [osmo-epdg implementation plan](https://osmocom.org/projects/os
 GIT Repository
 --------------
 
-You can clone from the official osmo-bsc.git repository using
+You can clone from the official osmo-epdg.git repository using
 
         git clone https://gitea.osmocom.org/erlang/osmo-epdg
 
@@ -52,8 +52,8 @@ contributions.  Please see
 <https://osmocom.org/projects/cellular-infrastructure/wiki/Gerrit> for
 more details
 
-The current patch queue for osmo-bsc can be seen at
-<https://gerrit.osmocom.org/#/q/project:osmo-epdg+status:open>
+The current patch queue for osmo-epdg can be seen at
+<https://gerrit.osmocom.org/#/q/project:erlang/osmo-epdg+status:open>
 
 
 Building
