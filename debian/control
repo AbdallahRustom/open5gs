@@ -5,6 +5,7 @@ Priority: optional
 Build-Depends: erlang-nox,
 	libpcap-dev,
 	rebar3,
+	osmo-gsm-manuals-dev (>= 1.5.0),
 	debhelper (>= 10)
 Standards-Version: 4.5.0
 
@@ -14,3 +15,9 @@ Depends: erlang-nox
 Multi-Arch: allowed
 Description: Osmocom ePDG (Evolved Packet Data Gateway)
 
+Package: osmo-epdg-doc
+Architecture: all
+Section: doc
+Priority: optional
+Depends: ${misc:Depends}
+Description: ${misc:Package} PDF documentation

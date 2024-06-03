@@ -19,6 +19,9 @@ override_dh_auto_build:
 		cp _checkouts/gen_socket/priv/lib/gen_socket*.so ./_build/default/lib/gen_socket/priv/lib/; \
 	fi
 
+	# Build manuals
+	make -C docs/manuals
+
 override_dh_install:
 	install -d debian/tmp/etc/osmocom/
 	install -m 755 config/sys.config debian/tmp/etc/osmocom/osmo-epdg.config
@@ -29,3 +32,7 @@ override_dh_install:
 override_dh_clean:
 	dh_clean
 	rm -rf _build _checkouts
+
+# Don't create .pdf.gz files (barely saves space and they can't be opened directly by most pdf readers)
+override_dh_compress:
+	dh_compress -X.pdf
