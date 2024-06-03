@@ -8,3 +8,9 @@ erl_crash.dump
 src/diameter_3gpp*
 src/diameter_rfc*
 src/diameter_etsi*
+
+docs/manuals/build
+docs/manuals/common
+docs/manuals/generated
+docs/manuals/*.pdf
+docs/manuals/*.svg
