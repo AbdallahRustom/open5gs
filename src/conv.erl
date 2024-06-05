@@ -14,15 +14,15 @@
 % GNU General Public License for more details.
 %
 % You should have received a copy of the GNU Affero General Public License
-% along with this program.  If not, see <http://www.gnu.org/licenses/>.
+% along with this program.  If not, see <https://www.gnu.org/licenses/>.
 %
 % Additional Permission under GNU AGPL version 3 section 7:
 %
 % If you modify this Program, or any covered work, by linking or
 % combining it with runtime libraries of Erlang/OTP as released by
-% Ericsson on http://www.erlang.org (or a modified version of these
+% Ericsson on https://www.erlang.org (or a modified version of these
 % libraries), containing parts covered by the terms of the Erlang Public
-% License (http://www.erlang.org/EPLICENSE), the licensors of this
+% License (https://www.erlang.org/EPLICENSE), the licensors of this
 % Program grant you additional permission to convey the resulting work
 % without the need to license the runtime libraries of Erlang/OTP under
 % the GNU Affero General Public License. Corresponding Source for a
