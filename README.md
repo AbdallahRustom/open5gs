@@ -16,6 +16,8 @@ as well as a [modified strongwan](https://gitea.osmocom.org/ims-volte-vowifi/str
     [UE] <-> [strongswan] <-> [osmo-ePDG] <> [HSS]
                                           <> [PGW]
 
+osmo-epdg development has been supported by funding from the [NLnet foundation](https://nlnet.nl/).
+
 
 Homepage
 --------
