@@ -36,8 +36,11 @@ There is a web interface at <https://gitea.osmocom.org/erlang/osmo-epdg>
 Documentation
 -------------
 
-Once the project reaches a usable milestone, we will be working on a
-user manual.  Stay tuned.
+The User Manual is [optionally] built in PDF form as part of the build process, its asciidoc
+source can be found in the `docs/manuals` sub-directory.
+
+Pre-rendered PDF version of the current "master" can be found at
+[User Manual](https://ftp.osmocom.org/docs/osmo-epdg/master/osmoepdg-usermanual.pdf).
 
 
 Contributing
