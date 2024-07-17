@@ -4,7 +4,7 @@ variables:
   CHECKMARX_SCAN_ARGS: "-LocationPath $CI_PROJECT_DIR/lib -LocationPath $CI_PROJECT_DIR/src/smf -LocationPath $CI_PROJECT_DIR/src/upf"
 include:
   - project: 'to-be-continuous/custom/checkmarx'
-    ref: '2.3.0'
+    ref: '2.3.1'
     file: '/templates/gitlab-ci-checkmarx.yml'
 
   - project: 'to-be-continuous/gitleaks'
