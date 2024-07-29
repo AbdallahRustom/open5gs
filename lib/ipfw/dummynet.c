@@ -746,7 +746,8 @@ load_extra_delays(const char *filename, struct dn_profile *p,
 	}
 	p->samples_no = samples;
 	p->loss_level = loss * samples;
-	strncpy(p->name, profile_name, sizeof(p->name));
+	strncpy(p->name, profile_name, sizeof(p->name) - 1);
+	p->name[sizeof(p->name) - 1] = '\0';
 }
 
 /*
