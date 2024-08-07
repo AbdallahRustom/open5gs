@@ -125,6 +125,7 @@ ogs_sbi_request_t *smf_nchf_build_report(smf_sess_t *sess, void *data){
     OpenAPI_snssai_t snssai;
     OpenAPI_serving_network_function_id_t serving_network_function_id;
 
+
     ogs_uuid_t uuid;
     char id[OGS_UUID_FORMATTED_LENGTH + 1];
 
@@ -258,7 +259,7 @@ ogs_sbi_request_t *smf_nchf_build_report(smf_sess_t *sess, void *data){
     OpenAPI_list_add(used_unit_container_list, used_unit_container);
 
     
-    multiple_unit_usage = OpenAPI_multiple_unit_usage_create(1, requested_unit, used_unit_container_list ,NULL, NULL);
+    multiple_unit_usage = OpenAPI_multiple_unit_usage_create(1, requested_unit, used_unit_container_list ,(char *) "cae10c71-ee59-4498-ad50-12c013c3d375", NULL);
 
 
     OpenAPI_list_t *multiple_unit_usage_list = OpenAPI_list_create();
