@@ -52,6 +52,10 @@ struct dict_object *ogs_diam_rat_type = NULL;
 struct dict_object *ogs_diam_service_selection = NULL;
 struct dict_object *ogs_diam_visited_plmn_id = NULL;
 struct dict_object *ogs_diam_visited_network_identifier = NULL;
+struct dict_object *ogs_diam_framed_ip_address = NULL;
+struct dict_object *ogs_diam_framed_mtu = NULL;
+
+struct dict_object *ogs_diam_test = NULL;
 
 struct dict_object *ogs_diam_vendor = NULL;
 struct dict_object *ogs_diam_vendor_id = NULL;
@@ -97,7 +101,8 @@ int ogs_diam_message_init()
     CHECK_dict_search(DICT_AVP, AVP_BY_NAME_ALL_VENDORS, "Service-Selection", &ogs_diam_service_selection);
     CHECK_dict_search(DICT_AVP, AVP_BY_NAME_ALL_VENDORS, "Visited-PLMN-Id", &ogs_diam_visited_plmn_id);
     CHECK_dict_search(DICT_AVP, AVP_BY_NAME_ALL_VENDORS, "Visited-Network-Identifier", &ogs_diam_visited_network_identifier);
-
+    CHECK_dict_search(DICT_AVP, AVP_BY_NAME, "Framed-IP-Address", &ogs_diam_framed_ip_address);
+    CHECK_dict_search(DICT_AVP, AVP_BY_NAME, "Framed-MTU", &ogs_diam_framed_mtu);
     return 0;
 }
 

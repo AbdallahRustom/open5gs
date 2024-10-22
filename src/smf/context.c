@@ -300,6 +300,8 @@ int smf_context_parse_config(void)
 
     rv = smf_context_prepare();
     if (rv != OGS_OK) return rv;
+    
+    self.use_radius = false;
 
     ogs_yaml_iter_init(&root_iter, document);
     while (ogs_yaml_iter_next(&root_iter)) {
@@ -529,6 +531,27 @@ int smf_context_parse_config(void)
                             YAML_SCALAR_NODE);
                     self.mtu = atoi(ogs_yaml_iter_value(&smf_iter));
                     ogs_assert(self.mtu);
+                } else if(!strcmp(smf_key, "use_radius")) {
+                    const char* str_use_radius = ogs_yaml_iter_value(&smf_iter);
+                    ogs_assert(str_use_radius);
+                    if(!strcmp(str_use_radius, "true")) {
+                        self.use_radius = true;
+                    } 
+
+                } else if(!strcmp(smf_key, "set_ip_from_rs")) {
+                    const char* str_ip_from_rs = ogs_yaml_iter_value(&smf_iter);
+                    ogs_assert(str_ip_from_rs);
+                    if(!strcmp(str_ip_from_rs, "true")) {
+                        self.set_ip_from_rs = true;
+                    } 
+
+                } else if(!strcmp(smf_key, "enable_double_auth")) {
+                    const char* enable_double_auth = ogs_yaml_iter_value(&smf_iter);
+                    ogs_assert(enable_double_auth);
+                    if(!strcmp(enable_double_auth, "true")) {
+                        self.enable_double_auth = true;
+                    } 
+
                 } else if (!strcmp(smf_key, "p-cscf")) {
                     ogs_yaml_iter_t p_cscf_iter;
                     ogs_yaml_iter_recurse(&smf_iter, &p_cscf_iter);
@@ -3010,12 +3033,23 @@ int smf_pco_build(uint8_t *pco_buf, uint8_t *buffer, int length)
             }
             break;
         case OGS_PCO_ID_IPV4_LINK_MTU_REQUEST:
-            if (smf_self()->mtu) {
-                mtu = htons(smf_self()->mtu);
+            if(smf_self()->use_radius == true && smf_self()->framed_mtu){
+                if (smf_self()->framed_mtu) {
+                mtu = htons(smf_self()->framed_mtu);
                 smf.ids[smf.num_of_id].id = ue.ids[i].id;
                 smf.ids[smf.num_of_id].len = sizeof(uint16_t);
                 smf.ids[smf.num_of_id].data = &mtu;
                 smf.num_of_id++;
+                }
+
+            } else {
+                if (smf_self()->mtu) {
+                    mtu = htons(smf_self()->mtu);
+                    smf.ids[smf.num_of_id].id = ue.ids[i].id;
+                    smf.ids[smf.num_of_id].len = sizeof(uint16_t);
+                    smf.ids[smf.num_of_id].data = &mtu;
+                    smf.num_of_id++;
+                }
             }
             break;
         case OGS_PCO_ID_IP_ADDRESS_ALLOCATION_VIA_NAS_SIGNALLING:

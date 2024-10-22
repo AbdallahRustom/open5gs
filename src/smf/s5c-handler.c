@@ -30,7 +30,6 @@
 static void pfcp_sess_timeout(ogs_pfcp_xact_t *xact, void *data)
 {
     uint8_t type;
-    ogs_info("****** s5c-handler 1 *****");
     ogs_assert(xact);
     type = xact->seq[0].type;
 
@@ -55,7 +54,6 @@ void smf_s5c_handle_echo_request(
 {
     ogs_assert(xact);
     ogs_assert(req);
-    ogs_info("****** s5c-handler 2 *****");
     ogs_debug("[PGW] Receiving Echo Request");
     /* FIXME : Before implementing recovery counter correctly,
      *         I'll re-use the recovery value in request message */
@@ -74,7 +72,6 @@ uint8_t smf_s5c_handle_create_session_request(
 {
     char buf1[OGS_ADDRSTRLEN];
     char buf2[OGS_ADDRSTRLEN];
-    ogs_info("****** s5c-handler 3 *****");
     int i, rv;
     uint8_t cause_value = 0;
 
@@ -92,7 +89,6 @@ uint8_t smf_s5c_handle_create_session_request(
     ogs_assert(sess);
     ogs_assert(xact);
     ogs_assert(req);
-    ogs_info("***smf_s5c_handle_create_session_request**");
     ogs_debug("Create Session Request");
 
     cause_value = OGS_GTP2_CAUSE_REQUEST_ACCEPTED;
@@ -135,10 +131,13 @@ uint8_t smf_s5c_handle_create_session_request(
         cause_value = OGS_GTP2_CAUSE_CONDITIONAL_IE_MISSING;
     }
 
-    if (!ogs_diam_app_connected(OGS_DIAM_GX_APPLICATION_ID)) {
-        ogs_error("No Gx Diameter Peer");
-        cause_value = OGS_GTP2_CAUSE_REMOTE_PEER_NOT_RESPONDING;
+    if(smf_self()->use_radius == false){
+        if (!ogs_diam_app_connected(OGS_DIAM_GX_APPLICATION_ID)) {
+            ogs_error("No Gx Diameter Peer");
+            cause_value = OGS_GTP2_CAUSE_REMOTE_PEER_NOT_RESPONDING;
+        }
     }
+    
     switch (sess->gtp_rat_type) {
     case OGS_GTP2_RAT_TYPE_EUTRAN:
         if (req->bearer_contexts_to_be_created[0].
@@ -399,7 +398,6 @@ uint8_t smf_s5c_handle_delete_session_request(
         ogs_gtp2_delete_session_request_t *req)
 {
     ogs_debug("Delete Session Request");
-    ogs_info("****** s5c-handler 4 *****");
     ogs_assert(xact);
     ogs_assert(req);
 
@@ -459,7 +457,6 @@ void smf_s5c_handle_modify_bearer_request(
 
     smf_ue_t *smf_ue = NULL;
     smf_bearer_t *bearer = NULL;
-    ogs_info("****** s5c-handler 5 *****");
     ogs_debug("Modify Bearer Request");
 
     ogs_assert(gtp_xact);
@@ -628,7 +625,6 @@ void smf_s5c_handle_create_bearer_response(
     ogs_gtp2_f_teid_t *sgw_s5u_teid = NULL, *pgw_s5u_teid = NULL;
     smf_bearer_t *bearer = NULL;
     ogs_pfcp_far_t *dl_far = NULL;
-    ogs_info("****** s5c-handler 6 *****");
     ogs_assert(sess);
     ogs_assert(rsp);
 
@@ -802,7 +798,6 @@ void smf_s5c_handle_update_bearer_response(
     uint64_t gtp_flags = 0;
     uint64_t pfcp_flags = 0;
     smf_bearer_t *bearer = NULL;
-    ogs_info("****** s5c-handler 7 *****");
     ogs_assert(sess);
     ogs_assert(rsp);
 
@@ -906,7 +901,6 @@ bool smf_s5c_handle_delete_bearer_response(
     int rv;
     uint8_t cause_value;
     smf_bearer_t *bearer = NULL;
-    ogs_info("****** s5c-handler 8 *****");
     ogs_assert(sess);
     ogs_assert(rsp);
 
@@ -1016,7 +1010,6 @@ static int reconfigure_packet_filter(smf_pf_t *pf, ogs_gtp2_tft_t *tft, int i)
 
     ogs_assert(pf);
     ogs_assert(tft);
-    ogs_info("****** s5c-handler 9 *****");
     memset(&pf->ipfw_rule, 0, sizeof(ogs_ipfw_rule_t));
     pf->direction = tft->pf[i].direction;
     for (j = 0; j < tft->pf[i].content.num_of_component; j++) {
@@ -1109,7 +1102,6 @@ void smf_s5c_handle_bearer_resource_command(
     int rv;
     uint8_t cause_value = 0;
     int i;
-    ogs_info("****** s5c-handler 10 *****");
     ogs_gtp2_header_t h;
     ogs_pkbuf_t *pkbuf = NULL;
 

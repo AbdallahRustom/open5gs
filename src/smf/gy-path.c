@@ -560,7 +560,7 @@ void smf_gy_send_ccr(smf_sess_t *sess, void *xact,
 {
     int ret;
     smf_ue_t *smf_ue = NULL;
-
+    ogs_info("****smf_gy_send_ccr***log 1********");
     struct msg *req = NULL;
     struct avp *avp;
     struct avp *avpch1;
@@ -1107,7 +1107,7 @@ out:
     if (!error) {
         e = smf_event_new(SMF_EVT_GY_MESSAGE);
         ogs_assert(e);
-
+        ogs_info("****smf_gy_cca_cb***log 3********");
         e->sess = sess;
         e->gy_message = gy_message;
         if (gy_message->cc_request_type == OGS_DIAM_GY_CC_REQUEST_TYPE_UPDATE_REQUEST) {

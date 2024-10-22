@@ -152,6 +152,7 @@ uint32_t smf_gx_handle_cca_initial_request(
     ogs_assert(up2cp_pdr);
 
     /* Set UE IP Address to the Default DL PDR */
+
     ogs_assert(OGS_OK ==
         ogs_pfcp_paa_to_ue_ip_addr(&sess->session.paa,
             &dl_pdr->ue_ip_addr, &dl_pdr->ue_ip_addr_len));

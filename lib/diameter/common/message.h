@@ -102,6 +102,9 @@ extern struct dict_object *ogs_diam_rat_type;
 extern struct dict_object *ogs_diam_service_selection;
 extern struct dict_object *ogs_diam_visited_plmn_id;
 extern struct dict_object *ogs_diam_visited_network_identifier;
+extern struct dict_object *ogs_diam_framed_ip_address;
+extern struct dict_object *ogs_diam_framed_mtu;
+
 
 extern struct dict_object *ogs_diam_vendor;
 extern struct dict_object *ogs_diam_vendor_id;

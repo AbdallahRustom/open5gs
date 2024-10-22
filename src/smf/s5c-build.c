@@ -50,6 +50,8 @@ ogs_pkbuf_t *smf_s5c_build_create_session_response(
     uint8_t *epco_buf = NULL;
     int16_t epco_len;
 
+    // smf_context_t* self = smf_self();
+
     ogs_debug("[SMF] Create Session Response");
 
     ogs_assert(sess);
@@ -103,7 +105,7 @@ ogs_pkbuf_t *smf_s5c_build_create_session_response(
     if (sess->ipv4 && sess->ipv6)
         rsp->pdn_address_allocation.len = OGS_PAA_IPV4V6_LEN;
     else if (sess->ipv4)
-        rsp->pdn_address_allocation.len = OGS_PAA_IPV4_LEN;
+        rsp->pdn_address_allocation.len = OGS_PAA_IPV4_LEN;  
     else if (sess->ipv6)
         rsp->pdn_address_allocation.len = OGS_PAA_IPV6_LEN;
     else

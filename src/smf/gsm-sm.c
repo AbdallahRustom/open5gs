@@ -169,7 +169,6 @@ void smf_gsm_state_initial(ogs_fsm_t *s, smf_event_t *e)
 
     ogs_sbi_stream_t *stream = NULL;
     ogs_sbi_message_t *sbi_message = NULL;
-
     ogs_assert(s);
     ogs_assert(e);
 
@@ -177,6 +176,7 @@ void smf_gsm_state_initial(ogs_fsm_t *s, smf_event_t *e)
 
     sess = e->sess;
     ogs_assert(sess);
+    smf_context_t *self = smf_self();
 
     switch (e->h.id) {
     case OGS_FSM_ENTRY_SIG:
@@ -224,8 +224,20 @@ void smf_gsm_state_initial(ogs_fsm_t *s, smf_event_t *e)
             }
             switch (sess->gtp_rat_type) {
             case OGS_GTP2_RAT_TYPE_EUTRAN:
-                if (send_ccr_init_req_gx_gy(sess, e) == true)
-                    OGS_FSM_TRAN(s, smf_gsm_state_wait_epc_auth_initial);
+                if(self->use_radius == false){
+                    if (send_ccr_init_req_gx_gy(sess, e) == true)
+                        OGS_FSM_TRAN(s, smf_gsm_state_wait_epc_auth_initial);
+
+                }else if (self->use_radius == true){
+                    if(self->enable_double_auth){
+                        smf_s6b_send_aar(sess, e->gtp_xact);
+                        OGS_FSM_TRAN(s, smf_gsm_state_wait_epc_auth_initial);
+                    } else  {
+                        OGS_FSM_TRAN(s, smf_gsm_state_wait_pfcp_establishment);
+                        ogs_assert(OGS_OK ==
+                        smf_epc_pfcp_send_session_establishment_request(sess, e->gtp_xact, 0));
+                    }
+                }
                 break;
             case OGS_GTP2_RAT_TYPE_WLAN:
                 smf_s6b_send_aar(sess, e->gtp_xact);
@@ -241,6 +253,7 @@ void smf_gsm_state_initial(ogs_fsm_t *s, smf_event_t *e)
             ogs_error("Not implemented(type:%d)", gtp2_message->h.type);
         }
         break;
+
 
     case OGS_EVENT_SBI_SERVER:
         sbi_message = e->h.sbi.message;
@@ -340,12 +353,11 @@ void smf_gsm_state_wait_epc_auth_initial(ogs_fsm_t *s, smf_event_t *e)
 
     sess = e->sess;
     ogs_assert(sess);
-
     switch (e->h.id) {
     case SMF_EVT_GX_MESSAGE:
         gx_message = e->gx_message;
         ogs_assert(gx_message);
-
+        
         switch(gx_message->cmd_code) {
         case OGS_DIAM_GX_CMD_CODE_CREDIT_CONTROL:
             switch(gx_message->cc_request_type) {
@@ -600,6 +612,7 @@ void smf_gsm_state_wait_pfcp_establishment(ogs_fsm_t *s, smf_event_t *e)
                 }
 
                 gtp_xact = pfcp_xact->assoc_xact;
+                
                 if (gtp_xact) {
                     switch (gtp_xact->gtp_version) {
                     case 1:

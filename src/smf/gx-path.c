@@ -324,7 +324,12 @@ void smf_gx_send_ccr(smf_sess_t *sess, ogs_gtp_xact_t *xact,
         if (sess->ipv4) {
             ret = fd_msg_avp_new(ogs_diam_gx_framed_ip_address, 0, &avp);
             ogs_assert(ret == 0);
+
+            if(smf_self()->use_radius == true)
+            val.os.data = (uint8_t*)&sess->framed_ip_address_uint32;
+            else
             val.os.data = (uint8_t*)&sess->ipv4->addr;
+
             val.os.len = OGS_IPV4_LEN;
             ret = fd_msg_avp_setvalue(avp, &val);
             ogs_assert(ret == 0);

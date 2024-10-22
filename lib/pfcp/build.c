@@ -445,7 +445,6 @@ bool ogs_pfcp_build_created_pdr(
     ogs_assert(message);
 
     ogs_assert(pdr);
-
     if (pdr->f_teid_len) {
         memcpy(&pdrbuf[i].f_teid, &pdr->f_teid, pdr->f_teid_len);
         pdrbuf[i].f_teid.teid = htobe32(pdr->f_teid.teid);
