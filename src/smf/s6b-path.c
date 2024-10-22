@@ -342,6 +342,7 @@ static void smf_s6b_aaa_cb(void *data, struct msg **msg)
     struct session *session;
     struct avp *avp, *avpch1;
     struct avp_hdr *hdr;
+    
     unsigned long dur;
     int error = 0;
     int new;
@@ -419,6 +420,50 @@ static void smf_s6b_aaa_cb(void *data, struct msg **msg)
         error++;
     }
 
+    if(smf_self()->use_radius){
+
+        /* Value of framed_ip_address *srag*/
+        ret = fd_msg_search_avp(*msg, ogs_diam_gx_framed_ip_address, &avp);
+    
+        ogs_assert(ret == 0);
+        if (avp) {
+            ret = fd_msg_avp_hdr(avp, &hdr);
+            ogs_assert(ret == 0);
+            ogs_assert(hdr->avp_value->os.len == sizeof sess->framed_ip_address_uint32);
+            memcpy(&sess->framed_ip_address_uint32 ,hdr->avp_value->os.data, hdr->avp_value->os.len);
+
+            if(smf_self()->set_ip_from_rs ){
+                if (sess->ipv4 && sess->ipv6)
+                    sess->session.paa.both.addr =sess->framed_ip_address_uint32;
+                else if (sess->ipv4)
+                    sess->session.paa.addr =sess->framed_ip_address_uint32; 
+
+                    ogs_debug("From '%.*s' ",
+                        (int)hdr->avp_value->os.len, hdr->avp_value->os.data);
+            }
+        } else {
+            ogs_warn("no framed-ip-address ");
+           
+        }
+
+
+        /* Value of framed mtu *abdallah*/
+        ret = fd_msg_search_avp(*msg, ogs_diam_framed_mtu, &avp);
+        ogs_assert(ret == 0);
+        if (avp) {
+            ret = fd_msg_avp_hdr(avp, &hdr);
+            ogs_assert(ret == 0);
+            smf_self()->framed_mtu = hdr->avp_value->i32;
+            ogs_debug("From '%.*s' ",
+                    (int)hdr->avp_value->os.len, hdr->avp_value->os.data);
+        } else {
+            smf_self()->framed_mtu = 0;
+            ogs_warn("no framed-mtu ");
+            
+        }
+
+
+    }
     /* Value of Origin-Realm */
     ret = fd_msg_search_avp(*msg, ogs_diam_origin_realm, &avp);
     ogs_assert(ret == 0);
@@ -433,10 +478,13 @@ static void smf_s6b_aaa_cb(void *data, struct msg **msg)
     }
 
     if (!error) {
-        smf_gx_send_ccr(sess, xact,
-            OGS_DIAM_GX_CC_REQUEST_TYPE_INITIAL_REQUEST);
-    }
+        if(smf_self()->use_radius == true )
+            smf_gy_send_ccr(sess, xact,OGS_DIAM_GX_CC_REQUEST_TYPE_INITIAL_REQUEST);
+        else
+            smf_gx_send_ccr(sess, xact, OGS_DIAM_GX_CC_REQUEST_TYPE_INITIAL_REQUEST);
 
+    }
+    
     /* Free the message */
     ogs_assert(pthread_mutex_lock(&ogs_diam_logger_self()->stats_lock) == 0);
     dur = ((ts.tv_sec - sess_data->ts.tv_sec) * 1000000) +
@@ -477,6 +525,8 @@ static void smf_s6b_aaa_cb(void *data, struct msg **msg)
     ogs_assert(ret == 0);
     ogs_assert(sess_data == NULL);
 
+    // smf_epc_pfcp_send_session_establishment_request(sess, xact, 0);
+   
     ret = fd_msg_free(*msg);
     ogs_assert(ret == 0);
     *msg = NULL;

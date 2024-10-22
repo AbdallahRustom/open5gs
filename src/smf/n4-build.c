@@ -19,6 +19,69 @@
 
 #include "context.h"
 #include "n4-build.h"
+static void adding_add_pfcp_rules (smf_sess_t *sess){
+
+    smf_bearer_t *bearer = NULL;
+
+    bearer = smf_default_bearer_in_sess(sess);
+    ogs_assert(bearer);
+
+    if(smf_self()->use_radius == true )
+    {
+       if (!bearer->qer)   
+           bearer->qer = ogs_pfcp_qer_add(&sess->pfcp);
+    //    ogs_assert(bearer->urr);
+       bearer->qer->mbr.uplink = sess->session.ambr.uplink;
+       bearer->qer->mbr.downlink = sess->session.ambr.downlink;
+
+    //FAR
+    ogs_pfcp_far_t *dl_far = NULL;
+    ogs_pfcp_far_t *up2cp_far = NULL;
+    
+    smf_sess_create_cp_up_data_forwarding(sess);
+    dl_far = bearer->dl_far;
+    ogs_assert(dl_far);
+    up2cp_far = sess->up2cp_far;
+    ogs_assert(up2cp_far);
+
+    dl_far->apply_action = OGS_PFCP_APPLY_ACTION_FORW;
+
+    /* Set Outer Header Creation to the Default DL FAR */
+    ogs_assert(OGS_OK ==
+        ogs_pfcp_ip_to_outer_header_creation(
+            &bearer->sgw_s5u_ip,
+            &dl_far->outer_header_creation,
+            &dl_far->outer_header_creation_len));
+    dl_far->outer_header_creation.teid = bearer->sgw_s5u_teid;
+  
+/*FAR END*/
+
+       ogs_assert(sess->pfcp_node);
+       if (sess->pfcp_node->up_function_features.ftup){
+           bearer->ul_pdr->f_teid.ipv4 = 1;
+           bearer->ul_pdr->f_teid.ipv6 = 1;
+           bearer->ul_pdr->f_teid.ch = 1;
+           bearer->ul_pdr->f_teid.chid = 1;
+           bearer->ul_pdr->f_teid.choose_id = OGS_PFCP_DEFAULT_CHOOSE_ID;
+           bearer->ul_pdr->f_teid_len = 2;
+
+
+       }
+           if (bearer->qer) {
+            ogs_pfcp_pdr_associate_qer(bearer->ul_pdr, bearer->qer);
+            ogs_pfcp_pdr_associate_qer(bearer->dl_pdr, bearer->qer);
+       }
+       
+        ogs_assert(OGS_OK ==
+            ogs_pfcp_paa_to_ue_ip_addr(&sess->session.paa,
+            &bearer->ul_pdr->ue_ip_addr, &bearer->ul_pdr->ue_ip_addr_len));
+        ogs_assert(OGS_OK ==
+            ogs_pfcp_paa_to_ue_ip_addr(&sess->session.paa,
+            &bearer->dl_pdr->ue_ip_addr, &bearer->dl_pdr->ue_ip_addr_len));
+        // bearer->ul_pdr->ue_ip_addr.sd=1;
+        bearer->dl_pdr->ue_ip_addr.sd=1;
+    }
+}
 
 ogs_pkbuf_t *smf_n4_build_session_establishment_request(
         uint8_t type, smf_sess_t *sess, ogs_pfcp_xact_t *xact)
@@ -56,6 +119,9 @@ ogs_pkbuf_t *smf_n4_build_session_establishment_request(
 
     req = &pfcp_message->pfcp_session_establishment_request;
 
+    if(smf_self()->use_radius && !smf_self()->enable_double_auth)
+    adding_add_pfcp_rules(sess);
+    
     /* Node ID */
     rv = ogs_pfcp_sockaddr_to_node_id(&node_id, &len);
     if (rv != OGS_OK) {
@@ -574,3 +640,4 @@ ogs_pkbuf_t *smf_n4_build_session_deletion_request(
 
     return pkbuf;
 }
+

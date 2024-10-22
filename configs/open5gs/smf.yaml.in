@@ -625,7 +625,9 @@ smf:
     ctf:
       enabled: auto
     freeDiameter: @sysconfdir@/freeDiameter/smf.conf
-
+    use_radius: false
+    enable_double_auth : true #this flag can ONLY be true when use_radius flag is true.
+    set_ip_from_rs : false #this flag can ONLY be effective with enable_double_auth true.
 #
 #  <SBI Client>>
 #

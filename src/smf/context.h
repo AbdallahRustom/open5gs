@@ -92,9 +92,12 @@ typedef struct smf_context_s {
     ogs_hash_t      *n1n2message_hash; /* hash table (N1N2Message Location) */
 
     uint16_t        mtu;            /* MTU to advertise in PCO */
+    uint16_t        framed_mtu;      /*AAA server*/
     bool use_upg;
     const char* sgi_nwi;
-
+    bool use_radius ;
+    bool set_ip_from_rs ; //set ip from radius server, can be true only if use_radius is true
+    bool enable_double_auth ; // only possible if use_radius is true
     struct  {
         const char *integrity_protection_indication;
         const char *confidentiality_protection_indication;
@@ -261,6 +264,8 @@ typedef struct smf_sess_s {
     char            *gy_sid;        /* Gx Session ID */
     char            *s6b_sid;       /* S6b Session ID */
 
+    uint32_t        framed_ip_address_uint32; /* from AAA answer */
+    // uint32_t        framed_mtu_value  ;       /* from AAA answer */
     OGS_POOL(pf_precedence_pool, uint8_t);
 
 #define CLEAR_QOS_FLOW_ID(__sESS) \
