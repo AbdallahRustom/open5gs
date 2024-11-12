@@ -435,7 +435,7 @@ static void smf_s6b_aaa_cb(void *data, struct msg **msg)
             if(smf_self()->set_ip_from_rs ){
                 if (sess->ipv4 && sess->ipv6)
                     sess->session.paa.both.addr =sess->framed_ip_address_uint32;
-                else if (sess->ipv4)
+                else if (sess->ipv4){
                     sess->session.paa.addr =sess->framed_ip_address_uint32; 
 
                     ogs_debug("From '%.*s' ",
