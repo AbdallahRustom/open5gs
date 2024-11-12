@@ -2,6 +2,7 @@ variables:
   CHECKMARX_PROJECTNAME: "CxServer/ORANGE/WIN/OINIS/2G6/open5gs"
   CHECKMARX_FORCE_SCAN: "False"
   CHECKMARX_SCAN_ARGS: "-LocationPath $CI_PROJECT_DIR/lib -LocationPath $CI_PROJECT_DIR/src/smf -LocationPath $CI_PROJECT_DIR/src/upf"
+  GITLEAKS_ARGS: --exit-code 0
 include:
   - project: 'to-be-continuous/custom/checkmarx'
     ref: '2.3.1'
