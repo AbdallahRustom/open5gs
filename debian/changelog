@@ -1,3 +1,211 @@
+osmo-epdg (0.1.1) unstable; urgency=medium
+
+  [ Harald Welte ]
+  * add notice about NLnet found ation to README.md
+  * README.md: Use NLnet suggested language for funding acknowledgement
+  * README.md: Update user manual section; we now have one.
+
+  [ Oliver Smith ]
+  * rebar.lock: update gtplib commit
+
+ -- Oliver Smith <osmith@sysmocom.de>  Wed, 04 Dec 2024 15:24:46 +0100
+
+osmo-epdg (0.1.0) unstable; urgency=medium
+
+  [ Oliver Smith ]
+  * gitreview: new file
+  * debian/source/format: new file
+  * debian/rules: extract build_dep.tar.gz first
+
+  [ Pau Espin Pedrol ]
+  * Fix typo in osmo_epdg.app.src
+
+  [ Alexander Couzens ]
+  * add general project files
+
+  [ Pau Espin Pedrol ]
+  * osmo_epdg_app: Log app started
+  * cosmetic: gsup_client: Fix indentation
+
+  [ Alexander Couzens ]
+  * epdg_diameter_swx: fix SAR message
+
+  [ Pau Espin Pedrol ]
+  * cosmetic: epdg_diameter_swx.erl: Indentation fixes
+  * Initial GSUP server support
+  * Initial GSUP Auth handler support
+  * epdg_diameter_swx: parse the result code of the MAA
+  * gsup_server: call the server_assignment_request() on location update request
+  * Several fixes and improvement around env config use
+  * Add config envvars to change GSUP server listen IP addr and port
+  * osmo_epdg_app: Fix formatting error in log string
+  * diameter_swx: Fix MAA and SAA parsing mixed
+  * README.md: Fix path to config file
+  * Makefile: pass config file to 'make run'
+  * Makefile: Add shell target
+  * diameter_3gpp_ts29_273_swx.dia: Fix whitespace
+  * Makefile: run 'rebar3 clean' upon make clean
+  * Handle GSUP EPDG_Tunnel through GTPv2C CreateSession Req+Resp
+  * diameter: Add spec definitions for S6b (TS 28.273 and dep RFC 5777)
+  * Initial S6b support
+  * Fix sysmocom copyright typo
+  * s2b: Implement GTPv2C DeleteBearerReq
+
+  [ Alexander Couzens ]
+  * dia: 3gpp_ts29_273_s6b: add missing *[ AVP ] to AAA
+  * dia: 3gpp_ts29_273_s6b: add missing include of rfc4004
+  * epdg_gtpc_s2b: add TLV Serving Network
+  * epdg_gtpc_s2b: fix encoding of the IP address
+
+  [ Pau Espin Pedrol ]
+  * gsup_server: Remove incorrect log about reconnecting
+  * gsup_server: Improve log line when listening on gsup
+  * diameter: Allow configuring (re)connect timer in s6b and swx
+  * diameter: Make diameter_watchdog_config configurable
+  * swx: Rename diameter related parameters
+  * cosmetic: sys.config: Clean up formatting of logging section
+  * Update osmo_gsup dependency in rebar.config and update rebar.lock
+  * Forward IP Address from CreateSessionresponse in GSUP EPDG Tunnel Result
+  * Introduce ue_fsm
+  * Make CreateSession Req+Resp procedure async
+  * gsup_server: Use new GSUP Cause defines from osmo_gsup
+  * gsup_server: Introduce tx_gsup() internal function
+  * Use call() instead of cast() in ue_fsm
+  * Implement UE-initiated Detach
+  * Rename s/ue_fsm/epdg_ue_fsm/g
+  * s6b: Answer Diameter STR with STA
+  * Rename s/epdg_diameter_swx/aaa_diameter_swx
+  * Split auth_handler module into SWm files for ePDG and AAA Server
+  * Make SWm MAR+MAA asynchronous
+  * s6b: Trigger SAR towards HSS when receiving AAR from PGW
+  * Make Auth Compl procedure more similar to specs
+  * UE-initiated detach: Do STR+STA ePDG<->AAA-Server
+  * AAA-Server: Process S6b, SWx requests async through new aaa_ue_fsm
+  * Send SAR(DEREGISTRATION) to HSS when all sessions are terminated
+  * aaa_ue_fsm: S6b AAR should trigger SWx SAR with type=PGW_UPDATE
+  * epdg: Do SWm STR+STA upon rx of Delete Bearer Req
+  * epdg: Do CEAI CancelLocationReq upon rx of S2B Delete Bearer Req
+  * s2b: Session can contain several bearers
+  * s2b: Answer CreateBearerReq with CreateBearerResp
+  * Fix all sets() lookup functions
+  * epdg_ue_fsm: Terminate UE FSM when reciving STA from AAA-Server
+  * AAA-Server: Convert binary Imsi coming from internal SWm to string
+  * gsup_server: Log error if epdg_ue_fsm:auth_request() fails
+  * gsup_server: Delete session if initial auth failed
+  * AAA-Server: s6b: Fetch UE FSM Pid without asking SWm module
+  * gsup_server: Fix removal of session from set
+  * epdg_diameter_swm: Update PID if session already exists
+  * epdg_ue_fsm: Introduce public function to get pid from imsi
+
+  [ Alexander Couzens ]
+  * diameter: rfc7155: move Framed-* AVP into a separate file
+  * GTPv2/S2b: use correct instance id in the F-TEID
+
+  [ Pau Espin Pedrol ]
+  * Make PDP-Type and APN from GSUP AuthInfoReq available through all layers
+  * Add defines for PDP Address Type Nr
+  * Keep gtp2c specificities in its module file
+  * Create PDP Context in tunnel after rx S6b CreateSessionResp
+  * config: Drop unused sasl section
+  * gsup_server: Allow receiveing AuthInfo without PdpInfo
+  * Expect NAI instead of Imsi in S6b AAR
+  * s2b: Fix FTEID interface in CreateSessionResponse
+  * Use gtp_u_kmod to create a gtp tundev
+  * Create pdp context in the tundev
+  * cosmetic: s2b: Drop done TODO comment
+  * s2b: Use provided APN in CreateSessionReq
+  * s2b: Increment gtp SeqNo after transmitting message
+  * s2b: Take unused local TEIC/TEID when new one is needed
+  * epdg_ue_fsm: Allow re-auth procedure
+  * epdg_ue_fsm: Move s2b CreateSession to its own state
+  * gtp_u_tun: Fix call to gtp_u_kmod create_pdp_context
+  * epdg_ue_fsm: Add new state 'active'
+  * Delete PDP Context when moving out of active state
+  * config: Do not set up VRF
+  * s2b: Announce proper GTPU Local Address during CreateSessionReq
+  * Send correct APN in GSUP CEAI Tunnel Response
+  * rebar.lock: Update after dependency fixes/updates
+  * debian: Fixes in systemd service
+
+  [ Harald Welte ]
+  * README.md: Major update with the usual information
+
+  [ Pau Espin Pedrol ]
+  * gsup_server: Log rx of all GSUP messages
+  * s2b: Reorder some CreateSessionReq according to spec
+  * Use osmocom gtplib pointing to newer version of code
+  * Forward PCO from GSUP ePDG Tunnel Req to SMF CreateSessionRequest
+  * Update osmo_ss7 to gerrit remote with latest patches
+  * s2b: Spawn process for each received packet
+  * s2b: Handle CreateSession with failed Cause
+  * epdg_ue_fsm: Increase timeout waiting for gtp response
+  * aaa_diameter_swx_cb.erl: Fix undef handle_error/5
+  * aaa_diameter_swx: Make tx timeout configurable and increase default to 10 seconds
+  * epdg_ue_fsm.erl: Log unexpected event
+  * Forward PGW Address HSS->AAA->ePDG
+  * diameter_3gpp_ts29_273_swx.dia: Fix missing dependency RFC4004
+  * Forward PGW Address PGW->AAA->HSS
+  * Avoid propagating full diameter Swx MAA message to epdg gsup module
+  * gsups_server: Monitor epdg_ue_fsm instead of linking it
+  * epdg_ue_fsm: Allow UE restarting authentication
+  * Forward failure SWx MAA -> GSUP AuthInfo Error
+  * aaa_ue_fsm: Fix format error during log
+  * Migrate S6b to use new epdg_dia_rc record
+  * Move spawn_wait_ret() to a new misc.erl file
+  * gsup_server: Move rx_gsup path to its own function
+  * gsup_server: Look up epdg_ue_fsm process each time it needs to be accessed
+  * gsup_server: Spawn one process per rx message
+  * Implement sim auth resync
+  * cosmetic: diameter_3gpp_ts29_229.dia: Fix trailing whitespace
+  * diameter_3gpp_ts29_229.dia: Fix enum Reason-Code not defined
+  * aaa_diameter_swm: Look up aaa_ue_fsm process each time it needs to be accessed
+  * AAA: Swx: Answer RTR with RTA
+  * aaa_diameter_s6b.erl: Get rid of unused code
+  * epdg_ue_fsm: Fix order of params in stop_and_reply
+  * gsup_server: Fix format error in log line
+  * jenkins.sh: use available Makefile, clean before building
+  * rebar.config: Update required OTP version 25.2.3
+  * Implement RTR Deregistration-Reason PERMANENT_TERMINATION
+  * SWx: Answer PPR with PPA
+  * aaa_ue_fsm: Separate states using comment blocks
+  * {aaa,epdg}_diameter_swm: Prepend tx/rx to identify direction
+  * aaa_ue_fsm: Prepend rx_ prefix to SWm events missing it
+  * Propagate SWx PPR as SWm Authorization Update towards ePDG
+  * dia/diameter_3gpp_ts29_273_s6b.dia: Fix missing whitespace
+  * Propagate SWx PPR as S6b Re-Auth-Request
+  * epdg_diameter_swm: Fix typo in log line
+  * epdg_diameter_swm: Look up epdg_ue_fsm process each time it needs to be accessed
+  * Rename code paths Tx/Rx of Diameter Swm DER/DEA
+  * epdg_diameter_swm: Rename gen_server events to easily identify direction
+  * epdg_diameter_swm: Convert Tx calls to casts
+  * epdg: Tx SWm RAA from within epdg_ue_fsm
+  * epdg: Trigger AAR+AAA upon rx of RAR
+  * epdg_ue_fsm: Properly define type of field in record
+
+  [ Alexander Couzens ]
+  * docs: add basic manual of the osmo-epdg
+  * docs: add chapter operating
+  * docs: add acknowledgement to nlnet for funding this project
+
+  [ Oliver Smith ]
+  * contrib/systemd: use StateDirectory
+  * contrib/systemd: run as osmocom user
+
+  [ Vadim Yanitskiy ]
+  * README.md: fix copy-pasted 'osmo-bsc' and a broken link
+
+  [ Oliver Smith ]
+  * contrib/jenkins_manuals: new file
+  * gitignore: add manuals related
+  * debian: add oemo-epdg-doc subpackage
+
+  [ Harald Welte ]
+  * add COPYING file with the license (and the additional terms)
+  * add license header to source files where it's missing
+  * use https instead of http for all URLs
+
+ -- Oliver Smith <osmith@sysmocom.de>  Wed, 04 Dec 2024 15:24:23 +0100
+
 osmo-epdg (0.0.0) unstable; urgency=medium
 
   Initial
