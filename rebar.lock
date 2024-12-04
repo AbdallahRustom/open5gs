@@ -23,7 +23,7 @@
   0},
  {<<"gtplib">>,
   {git,"https://github.com/osmocom/gtplib",
-       {ref,"526a7e5d6ba4e76aaae87c31421f26a71dd79d33"}},
+       {ref,"08781f86f340aeaa4708166bfbeccf754217023e"}},
   0},
  {<<"lager">>,
   {git,"https://github.com/erlang-lager/lager",
