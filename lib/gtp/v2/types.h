@@ -272,10 +272,10 @@ ED8(uint8_t notify_start_pause_of_charging_via_user_plane_support_indication:1;,
     uint8_t indirect_data_forwarding_with_upf_indication:1;,
     uint8_t emergency_pdu_session_indication:1;)
 
-ED4(uint8_t spare1:5;,
-    uint8_t lte_m_satellite_access_indication:1;,
-    uint8_t satellite_rat_type_reporting_to_pgw_indication:1;,
-    uint8_t user_plane_integrity_protection_support_indication:1;)
+// ED4(uint8_t spare1:5;,
+//     uint8_t lte_m_satellite_access_indication:1;,
+//     uint8_t satellite_rat_type_reporting_to_pgw_indication:1;,
+//     uint8_t user_plane_integrity_protection_support_indication:1;)
 } __attribute__ ((packed)) ogs_gtp2_indication_t;
 
 /* 8.13 Protocol Configuration Options (PCO)
