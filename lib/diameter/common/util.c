@@ -83,6 +83,7 @@ DiamId_t ogs_set_realm_from_imsi_bcd(const char * imsi_bcd) {
     char * mnc = strstr(realm, "mnc");
     if (mnc != NULL) {
         strncpy(mnc + 3, "01", 2);
+        mnc[5] = '.';
     }
 
     return realm;
