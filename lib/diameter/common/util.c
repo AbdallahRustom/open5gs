@@ -62,29 +62,30 @@ bool ogs_diam_app_connected(uint32_t app_id)
  *              MCC  MNC
  */
 DiamId_t ogs_set_realm_from_imsi_bcd(const char * imsi_bcd) {
-    DiamId_t realm = strdup(fd_g_config->cnf_diamrlm);
+    // DiamId_t realm = strdup(fd_g_config->cnf_diamrlm);
 
-    /* Get the MCC part */
-    char * mcc = strstr(realm, "mcc");
-    if (mcc != NULL) {
-        strncpy(mcc + 3, imsi_bcd, 3);
-    }
-
-    // /* Get the MNC part */
-    // char * mnc = strstr(realm, "mnc");
-    // if (mnc != NULL) {
-    //     //if MNC is 2 digit the last elemnt in imsi_bcd will be 0x00
-    //     if(imsi_bcd[OGS_MAX_IMSI_BCD_LEN])
-    //         strncpy(mnc + 4, imsi_bcd + 3, 3);
-    //     else
-    //         strncpy(mnc + 4, imsi_bcd + 3, 2);
+    // /* Get the MCC part */
+    // char * mcc = strstr(realm, "mcc");
+    // if (mcc != NULL) {
+    //     strncpy(mcc + 3, imsi_bcd, 3);
     // }
 
-    char * mnc = strstr(realm, "mnc");
-    if (mnc != NULL) {
-        strncpy(mnc + 3, "01", 2);
-        mnc[5] = '.';
-    }
+    // // /* Get the MNC part */
+    // // char * mnc = strstr(realm, "mnc");
+    // // if (mnc != NULL) {
+    // //     //if MNC is 2 digit the last elemnt in imsi_bcd will be 0x00
+    // //     if(imsi_bcd[OGS_MAX_IMSI_BCD_LEN])
+    // //         strncpy(mnc + 4, imsi_bcd + 3, 3);
+    // //     else
+    // //         strncpy(mnc + 4, imsi_bcd + 3, 2);
+    // // }
+
+    // char * mnc = strstr(realm, "mnc");
+    // if (mnc != NULL) {
+    //     strncpy(mnc + 3, "01", 2);
+    //     mnc[5] = '.';
+    // }
+    DiamId_t realm = strdup("epc.mnc01.mcc001.3gppnetwork.org")
 
     return realm;
 }
