@@ -85,7 +85,7 @@ DiamId_t ogs_set_realm_from_imsi_bcd(const char * imsi_bcd) {
     //     strncpy(mnc + 3, "01", 2);
     //     mnc[5] = '.';
     // }
-    DiamId_t realm = strdup("epc.mnc01.mcc001.3gppnetwork.org");
+    DiamId_t realm = strdup("epc.mnc93.mcc208.3gppnetwork.org");
 
     return realm;
 }
