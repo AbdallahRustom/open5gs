@@ -1,0 +1,126 @@
+apiVersion: v1
+data:
+  smf.conf: |
+    Identity = "smf.epc.mnc024.mcc208.3gppnetwork.org";
+
+    Realm = "epc.mnc024.mcc208.3gppnetwork.org";
+
+    ListenOn = "127.0.0.1";
+
+    TLS_Cred = "/open5gs/install/etc/freeDiameter/smf-cert.pem",
+    "/open5gs/install/etc/freeDiameter/smf-key.pem";
+
+    TLS_CA = "/open5gs/install/etc/freeDiameter/cacert.pem";
+
+    LoadExtension = "/usr/local/lib/freeDiameter/dbg_msg_dumps.fdx" : "0x8888";
+
+    LoadExtension = "/usr/local/lib/freeDiameter/dict_rfc5777.fdx";
+
+    LoadExtension = "/usr/local/lib/freeDiameter/dict_mip6i.fdx";
+
+    LoadExtension = "/usr/local/lib/freeDiameter/dict_nasreq.fdx";
+
+    LoadExtension = "/usr/local/lib/freeDiameter/dict_nas_mipv6.fdx";
+
+    LoadExtension = "/usr/local/lib/freeDiameter/dict_dcca.fdx";
+
+    LoadExtension = "/usr/local/lib/freeDiameter/dict_dcca_3gpp.fdx";
+
+    ConnectPeer = "dta.epc.mnc024.mcc208.3gppnetwork.org" { ConnectTo =
+    "127.0.0.1"; Port =38681; No_TLS; };
+  smf.yaml: |
+
+    logger:
+        file: /open5gs/install/var/log/open5gs/smf.log
+        level: trace
+    sbi:
+        server:
+          no_tls: true
+        client:
+          no_tls: true
+    parameter:
+        no_ipv4v6_local_addr_in_packet_filter: true
+    smf:
+        use_radius: true
+        freeDiameter: /open5gs/install/etc/freeDiameter/smf.conf
+        gtpc:
+          - addr: 46.23.254.152
+        gtpu:
+          - addr: 46.23.254.152
+        pfcp:
+          - dev: eth0
+            port: 8806
+        subnet:
+          - dnn: test23.swir.mnc024.mcc208.gprs
+            addr: 10.10.10.1/24
+          - dnn: test23.swir.mnc020.mcc240.gprs
+            addr: 10.10.10.1/24
+          - dnn: test23.swir.mnc050.mcc234.gprs
+            addr: 10.10.10.1/24
+          - dnn: test24.swir.mnc024.mcc208.gprs
+            addr: 10.10.20.1/24
+            range: 10.10.20.10-10.10.20.29
+          - dnn: test24.swir.mnc020.mcc240.gprs
+            addr: 10.10.20.1/24
+            range: 10.10.20.30-10.10.20.49
+          - dnn: test24.swir.mnc050.mcc234.gprs
+            addr: 10.10.20.1/24
+            range: 10.10.20.50-10.10.20.69  
+        dns:
+          - 8.8.8.8
+          - 8.8.4.4
+        # TBD
+        # p-cscf:
+        #   - 10.42.0.3
+        mtu: 1460
+        ctf:
+          enabled: yes
+        metrics:
+          - addr: 0.0.0.0
+            port: 9091
+        cdr:
+          enabled: true
+          file_capture_period_sec: 1800
+          reporting_period_sec: 10
+          log_dir: /open5gs/install/var/cdr/smf
+          sgw_name: swtrial-olb-smf-olb
+    # upf:
+    #     pfcp:
+    #       - addr: swtrial-olb-upf-svc
+kind: ConfigMap
+metadata:
+  annotations:
+    meta.helm.sh/release-name: swtrial
+    meta.helm.sh/release-namespace: olb
+  creationTimestamp: '2024-12-05T13:07:39Z'
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:data: {}
+        f:metadata:
+          f:annotations:
+            .: {}
+            f:meta.helm.sh/release-name: {}
+            f:meta.helm.sh/release-namespace: {}
+          f:labels:
+            .: {}
+            f:app.kubernetes.io/managed-by: {}
+      manager: helm
+      operation: Update
+      time: '2024-12-05T16:41:13Z'
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:data:
+          f:smf.conf: {}
+          f:smf.yaml: {}
+      manager: agent
+      operation: Update
+      time: '2025-03-31T11:58:06Z'
+  name: swtrial-olb-smf-cm
+  namespace: olb
+  resourceVersion: '393250028'
+  uid: 14ef58ed-5295-477d-a624-e0539f58fab8

@@ -103,9 +103,12 @@ static bool send_ccr_init_req_gx_gy(smf_sess_t *sess, smf_event_t *e)
         return false;
     }
 
-    sess->sm_data.gx_ccr_init_in_flight = true;
-    smf_gx_send_ccr(sess, e->gtp_xact,
+
+    if(self->use_radius == false){
+        sess->sm_data.gx_ccr_init_in_flight = true;
+        smf_gx_send_ccr(sess, e->gtp_xact,
         OGS_DIAM_GX_CC_REQUEST_TYPE_INITIAL_REQUEST);
+    }
 
     if (use_gy == 1) {
         /* Gy is available,
@@ -233,9 +236,9 @@ void smf_gsm_state_initial(ogs_fsm_t *s, smf_event_t *e)
                         smf_s6b_send_aar(sess, e->gtp_xact);
                         OGS_FSM_TRAN(s, smf_gsm_state_wait_epc_auth_initial);
                     } else  {
-                        OGS_FSM_TRAN(s, smf_gsm_state_wait_pfcp_establishment);
-                        ogs_assert(OGS_OK ==
-                        smf_epc_pfcp_send_session_establishment_request(sess, e->gtp_xact, 0));
+                        OGS_FSM_TRAN(s, smf_gsm_state_wait_epc_auth_initial);
+                        // ogs_assert(OGS_OK ==
+                        // smf_epc_pfcp_send_session_establishment_request(sess, e->gtp_xact, 0));
                     }
                 }
                 break;
