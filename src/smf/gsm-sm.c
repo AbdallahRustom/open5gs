@@ -91,7 +91,7 @@ static void send_gtp_delete_err_msg(const smf_sess_t *sess,
 static bool send_ccr_init_req_gx_gy(smf_sess_t *sess, smf_event_t *e)
 {
     int use_gy = smf_use_gy_iface();
-
+    smf_context_t *self = smf_self();
     if (use_gy == -1) {
         ogs_error("No Gy Diameter Peer");
         /* TODO: drop Gx connection here,
@@ -236,6 +236,7 @@ void smf_gsm_state_initial(ogs_fsm_t *s, smf_event_t *e)
                         smf_s6b_send_aar(sess, e->gtp_xact);
                         OGS_FSM_TRAN(s, smf_gsm_state_wait_epc_auth_initial);
                     } else  {
+                        if (send_ccr_init_req_gx_gy(sess, e) == true)
                         OGS_FSM_TRAN(s, smf_gsm_state_wait_epc_auth_initial);
                         // ogs_assert(OGS_OK ==
                         // smf_epc_pfcp_send_session_establishment_request(sess, e->gtp_xact, 0));
