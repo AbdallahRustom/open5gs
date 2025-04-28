@@ -400,12 +400,21 @@ uint8_t smf_s5c_handle_delete_session_request(
     ogs_debug("Delete Session Request");
     ogs_assert(xact);
     ogs_assert(req);
+    smf_context_t *self = smf_self();
 
-    if (!ogs_diam_app_connected(OGS_DIAM_GX_APPLICATION_ID)) {
-        ogs_error("No Gx Diameter Peer");
-        return OGS_GTP2_CAUSE_REMOTE_PEER_NOT_RESPONDING;
+    if(self->use_radius == true){
+        if (!ogs_diam_app_connected(OGS_DIAM_GY_APPLICATION_ID)) {
+            ogs_error("No GY Diameter Peer");
+            return OGS_GTP2_CAUSE_REMOTE_PEER_NOT_RESPONDING;
+        }
+
+    }else{
+        if (!ogs_diam_app_connected(OGS_DIAM_GX_APPLICATION_ID)) {
+            ogs_error("No Gx Diameter Peer");
+            return OGS_GTP2_CAUSE_REMOTE_PEER_NOT_RESPONDING;
+        }
     }
-
+    
     if (sess->gtp_rat_type == OGS_GTP2_RAT_TYPE_WLAN) {
         if (!ogs_diam_app_connected(OGS_DIAM_S6B_APPLICATION_ID)) {
             ogs_error("No S6b Diameter Peer");
