@@ -125,6 +125,7 @@ static bool send_ccr_termination_req_gx_gy_s6b(smf_sess_t *sess, smf_event_t *e)
     /* TODO: we should take into account here whether "sess" has an active Gy
        session created, not whether one was supposedly created as per policy */
     int use_gy = smf_use_gy_iface();
+    smf_context_t *self = smf_self();
 
     if (use_gy == -1) {
         ogs_error("No Gy Diameter Peer");
