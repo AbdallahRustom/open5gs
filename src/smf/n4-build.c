@@ -119,8 +119,8 @@ ogs_pkbuf_t *smf_n4_build_session_establishment_request(
 
     req = &pfcp_message->pfcp_session_establishment_request;
 
-    if(smf_self()->use_radius && !smf_self()->enable_double_auth)
-    adding_add_pfcp_rules(sess);
+    // if(smf_self()->use_radius && !smf_self()->enable_double_auth)
+    // adding_add_pfcp_rules(sess);
     
     /* Node ID */
     rv = ogs_pfcp_sockaddr_to_node_id(&node_id, &len);
