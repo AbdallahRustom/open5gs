@@ -143,7 +143,7 @@ static bool send_ccr_termination_req_gx_gy_s6b(smf_sess_t *sess, smf_event_t *e)
             OGS_DIAM_TERMINATION_CAUSE_DIAMETER_LOGOUT);
     }
 
-    if (self-> use_radius==false){
+    if (self->use_radius==false){
         sess->sm_data.gx_ccr_term_in_flight = true;
         smf_gx_send_ccr(sess, e->gtp_xact,
             OGS_DIAM_GX_CC_REQUEST_TYPE_TERMINATION_REQUEST);
