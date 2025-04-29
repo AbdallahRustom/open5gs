@@ -138,76 +138,76 @@ uint32_t smf_gy_handle_cca_initial_request(
         bearer->urr = ogs_pfcp_urr_add(&sess->pfcp);
     ogs_assert(bearer->urr);
     
-    /************srag&abdallah*********/
-    if(smf_self()->use_radius == true )
-    {
-        // ogs_list_add(&sess->pfcp.far_list,&bearer->dl_pdr->to_create_node);
+//     /************srag&abdallah*********/
+//     if(smf_self()->use_radius == true )
+//     {
+//         // ogs_list_add(&sess->pfcp.far_list,&bearer->dl_pdr->to_create_node);
         
 
-       if (!bearer->qer)   
-           bearer->qer = ogs_pfcp_qer_add(&sess->pfcp);
-       ogs_assert(bearer->urr);
-       bearer->qer->mbr.uplink = sess->session.ambr.uplink;
-       bearer->qer->mbr.downlink = sess->session.ambr.downlink;
+//        if (!bearer->qer)   
+//            bearer->qer = ogs_pfcp_qer_add(&sess->pfcp);
+//        ogs_assert(bearer->urr);
+//        bearer->qer->mbr.uplink = sess->session.ambr.uplink;
+//        bearer->qer->mbr.downlink = sess->session.ambr.downlink;
 
 
-    //FAR
-    ogs_pfcp_far_t *dl_far = NULL;
-    ogs_pfcp_far_t *up2cp_far = NULL;
+//     //FAR
+//     ogs_pfcp_far_t *dl_far = NULL;
+//     ogs_pfcp_far_t *up2cp_far = NULL;
     
-    smf_sess_create_cp_up_data_forwarding(sess);
-    dl_far = bearer->dl_far;
-    ogs_assert(dl_far);
-    up2cp_far = sess->up2cp_far;
-    ogs_assert(up2cp_far);
+//     smf_sess_create_cp_up_data_forwarding(sess);
+//     dl_far = bearer->dl_far;
+//     ogs_assert(dl_far);
+//     up2cp_far = sess->up2cp_far;
+//     ogs_assert(up2cp_far);
 
-    dl_far->apply_action = OGS_PFCP_APPLY_ACTION_FORW;
+//     dl_far->apply_action = OGS_PFCP_APPLY_ACTION_FORW;
 
-    /* Set Outer Header Creation to the Default DL FAR */
-    ogs_assert(OGS_OK ==
-        ogs_pfcp_ip_to_outer_header_creation(
-            &bearer->sgw_s5u_ip,
-            &dl_far->outer_header_creation,
-            &dl_far->outer_header_creation_len));
-    dl_far->outer_header_creation.teid = bearer->sgw_s5u_teid;
+//     /* Set Outer Header Creation to the Default DL FAR */
+//     ogs_assert(OGS_OK ==
+//         ogs_pfcp_ip_to_outer_header_creation(
+//             &bearer->sgw_s5u_ip,
+//             &dl_far->outer_header_creation,
+//             &dl_far->outer_header_creation_len));
+//     dl_far->outer_header_creation.teid = bearer->sgw_s5u_teid;
 
-    // ogs_pfcp_far_t *new_far = NULL;
+//     // ogs_pfcp_far_t *new_far = NULL;
     
-    // new_far= ogs_pfcp_far_add(&sess->pfcp);
-    // ogs_assert(new_far);
-    // new_far->apply_action= OGS_PFCP_APPLY_ACTION_FORW;
+//     // new_far= ogs_pfcp_far_add(&sess->pfcp);
+//     // ogs_assert(new_far);
+//     // new_far->apply_action= OGS_PFCP_APPLY_ACTION_FORW;
   
-/*FAR END*/
+// /*FAR END*/
 
-    // ogs_pfcp_pdr_associate_far(bearer->dl_pdr,new_far);
-    // ogs_pfcp_pdr_associate_far(bearer->ul_pdr,new_far);
+//     // ogs_pfcp_pdr_associate_far(bearer->dl_pdr,new_far);
+//     // ogs_pfcp_pdr_associate_far(bearer->ul_pdr,new_far);
 
-       ogs_assert(sess->pfcp_node);
-       if (sess->pfcp_node->up_function_features.ftup){
-           bearer->ul_pdr->f_teid.ipv4 = 1;
-           bearer->ul_pdr->f_teid.ipv6 = 1;
-           bearer->ul_pdr->f_teid.ch = 1;
-           bearer->ul_pdr->f_teid.chid = 1;
-           bearer->ul_pdr->f_teid.choose_id = OGS_PFCP_DEFAULT_CHOOSE_ID;
-           bearer->ul_pdr->f_teid_len = 2;
+//        ogs_assert(sess->pfcp_node);
+//        if (sess->pfcp_node->up_function_features.ftup){
+//            bearer->ul_pdr->f_teid.ipv4 = 1;
+//            bearer->ul_pdr->f_teid.ipv6 = 1;
+//            bearer->ul_pdr->f_teid.ch = 1;
+//            bearer->ul_pdr->f_teid.chid = 1;
+//            bearer->ul_pdr->f_teid.choose_id = OGS_PFCP_DEFAULT_CHOOSE_ID;
+//            bearer->ul_pdr->f_teid_len = 2;
 
 
-       }
-           if (bearer->qer) {
-            ogs_pfcp_pdr_associate_qer(bearer->ul_pdr, bearer->qer);
-            ogs_pfcp_pdr_associate_qer(bearer->dl_pdr, bearer->qer);
-       }
+//        }
+//            if (bearer->qer) {
+//             ogs_pfcp_pdr_associate_qer(bearer->ul_pdr, bearer->qer);
+//             ogs_pfcp_pdr_associate_qer(bearer->dl_pdr, bearer->qer);
+//        }
        
-        ogs_assert(OGS_OK ==
-            ogs_pfcp_paa_to_ue_ip_addr(&sess->session.paa,
-            &bearer->ul_pdr->ue_ip_addr, &bearer->ul_pdr->ue_ip_addr_len));
-        ogs_assert(OGS_OK ==
-            ogs_pfcp_paa_to_ue_ip_addr(&sess->session.paa,
-            &bearer->dl_pdr->ue_ip_addr, &bearer->dl_pdr->ue_ip_addr_len));
-        // bearer->ul_pdr->ue_ip_addr.sd=1;
-        bearer->dl_pdr->ue_ip_addr.sd=1;
-    }
-    /************srag&abdallah*********/
+//         ogs_assert(OGS_OK ==
+//             ogs_pfcp_paa_to_ue_ip_addr(&sess->session.paa,
+//             &bearer->ul_pdr->ue_ip_addr, &bearer->ul_pdr->ue_ip_addr_len));
+//         ogs_assert(OGS_OK ==
+//             ogs_pfcp_paa_to_ue_ip_addr(&sess->session.paa,
+//             &bearer->dl_pdr->ue_ip_addr, &bearer->dl_pdr->ue_ip_addr_len));
+//         // bearer->ul_pdr->ue_ip_addr.sd=1;
+//         bearer->dl_pdr->ue_ip_addr.sd=1;
+//     }
+//     /************srag&abdallah*********/
     /* Configure based on what we received from OCS: */
     urr_update_time(sess, bearer->urr, gy_message);
     urr_update_volume(sess, bearer->urr, gy_message);
