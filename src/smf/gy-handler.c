@@ -146,7 +146,7 @@ uint32_t smf_gy_handle_cca_initial_request(
 
        if (!bearer->qer)   
            bearer->qer = ogs_pfcp_qer_add(&sess->pfcp);
-       ogs_assert(bearer->urr);
+       ogs_assert(bearer->qer);
        bearer->qer->mbr.uplink = sess->session.ambr.uplink;
        bearer->qer->mbr.downlink = sess->session.ambr.downlink;
 
