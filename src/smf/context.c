@@ -2387,17 +2387,17 @@ smf_bearer_t *smf_bearer_add(smf_sess_t *sess)
     
     ogs_pfcp_urr_t *urr = NULL;
 
-    /* If usage logging enabled create a new URR */
-    if (ogs_pfcp_self()->usageLoggerState.enabled) {
-        urr = ogs_pfcp_urr_add(&sess->pfcp);
-        ogs_assert(urr);
+    // /* If usage logging enabled create a new URR */
+    // if (ogs_pfcp_self()->usageLoggerState.enabled) {
+    //     urr = ogs_pfcp_urr_add(&sess->pfcp);
+    //     ogs_assert(urr);
 
-        urr->meas_method = OGS_PFCP_MEASUREMENT_METHOD_DURATION;
-        urr->rep_triggers.time_threshold = 1;
-        urr->time_threshold = ogs_pfcp_self()->usageLoggerState.reporting_period_sec;
-        /* Enable Immediate Start Time Metering */
-        urr->meas_info.istm = 1;
-    }
+    //     urr->meas_method = OGS_PFCP_MEASUREMENT_METHOD_DURATION;
+    //     urr->rep_triggers.time_threshold = 1;
+    //     urr->time_threshold = ogs_pfcp_self()->usageLoggerState.reporting_period_sec;
+    //     /* Enable Immediate Start Time Metering */
+    //     urr->meas_info.istm = 1;
+    // }
 
     /* PDR */
     dl_pdr = ogs_pfcp_pdr_add(&sess->pfcp);
