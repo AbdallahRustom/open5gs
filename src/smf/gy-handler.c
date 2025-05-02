@@ -134,7 +134,7 @@ uint32_t smf_gy_handle_cca_initial_request(
     bearer = smf_default_bearer_in_sess(sess);
     ogs_assert(bearer);
 
-    // ogs_pfcp_urr_t *urr = NULL;
+    ogs_pfcp_urr_t *urr = NULL;
     urr = bearer->urr;
 
     if (!urr){
