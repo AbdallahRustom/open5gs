@@ -134,9 +134,9 @@ uint32_t smf_gy_handle_cca_initial_request(
     bearer = smf_default_bearer_in_sess(sess);
     ogs_assert(bearer);
 
-    // if (!bearer->urr)
-    //     bearer->urr = ogs_pfcp_urr_add(&sess->pfcp);
-    // ogs_assert(bearer->urr);
+    if (!bearer->urr)
+        bearer->urr = ogs_pfcp_urr_add(&sess->pfcp);
+    ogs_assert(bearer->urr);
     
     /************srag&abdallah*********/
     if(smf_self()->use_radius == true )
@@ -296,8 +296,8 @@ uint32_t smf_gy_handle_cca_initial_request(
     }
     /************srag&abdallah*********/
     /* Configure based on what we received from OCS: */
-    urr_update_time(sess, bearer->urr, gy_message);
-    // urr_update_volume(sess, bearer->urr, gy_message);
+    // urr_update_time(sess, bearer->urr, gy_message);
+    urr_update_volume(sess, bearer->urr, gy_message);
 
     /* Associate acconting URR each direction PDR: */
     // ogs_pfcp_pdr_associate_urr(bearer->ul_pdr, bearer->urr);
