@@ -134,19 +134,10 @@ uint32_t smf_gy_handle_cca_initial_request(
     bearer = smf_default_bearer_in_sess(sess);
     ogs_assert(bearer);
 
-    // ogs_pfcp_urr_t *urr = NULL;
-    // // urr = bearer->urr;
-
-    // // if (!urr){
-    //     urr = ogs_pfcp_urr_add(&sess->pfcp);
-    //     ogs_assert(urr);
-    //     // bearer->urr = urr;
-        
-    // // }
-    // urr->meas_method = OGS_PFCP_MEASUREMENT_METHOD_VOLUME;
-    // urr->rep_triggers.volume_threshold = 1;
-    // urr->vol_threshold.tovol = 1;
-    // urr->vol_threshold.total_volume = 1024*1024*100;
+    if (!bearer->urr){
+        bearer->urr = ogs_pfcp_urr_add(&sess->pfcp);
+        ogs_assert(bearer->urr);
+    }
     /************srag&abdallah*********/
     if(smf_self()->use_radius == true )
     {
@@ -306,11 +297,11 @@ uint32_t smf_gy_handle_cca_initial_request(
     /************srag&abdallah*********/
     /* Configure based on what we received from OCS: */
     // urr_update_time(sess, bearer->urr, gy_message);
-    // urr_update_volume(sess, bearer->urr, gy_message);
+    urr_update_volume(sess, bearer->urr, gy_message);
 
     /* Associate acconting URR each direction PDR: */
-    // ogs_pfcp_pdr_associate_urr(bearer->ul_pdr, bearer->urr);
-    // ogs_pfcp_pdr_associate_urr(bearer->dl_pdr, bearer->urr);
+    ogs_pfcp_pdr_associate_urr(bearer->ul_pdr, bearer->urr);
+    ogs_pfcp_pdr_associate_urr(bearer->dl_pdr, bearer->urr);
 
 
     return ER_DIAMETER_SUCCESS;
