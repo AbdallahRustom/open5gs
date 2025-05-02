@@ -134,24 +134,19 @@ uint32_t smf_gy_handle_cca_initial_request(
     bearer = smf_default_bearer_in_sess(sess);
     ogs_assert(bearer);
 
-    if (!bearer->urr){
-        bearer->urr = ogs_pfcp_urr_add(&sess->pfcp);
+    ogs_pfcp_urr_t *urr = NULL;
+    urr = bearer->urr;
+
+    if (!urr){
+        urr = ogs_pfcp_urr_add(&sess->pfcp);
         ogs_assert(bearer->urr);
-        ogs_pfcp_urr_t *urr = NULL;
-        ogs_list_for_each(&sess->pfcp.urr_list, urr) {
-            if (urr == bearer->urr) {
-                urr->meas_method = OGS_PFCP_MEASUREMENT_METHOD_VOLUME;
-                urr->rep_triggers.volume_threshold = 1;
-                urr->vol_threshold.tovol = 1;
-                urr->vol_threshold.total_volume = 1024 * 1024 * 100;
-                break;
-            }
-        }
-        bearer->urr->meas_method = OGS_PFCP_MEASUREMENT_METHOD_VOLUME;
-        bearer->urr->rep_triggers.volume_threshold = 1;
-        bearer->urr->vol_threshold.tovol = 1;
-        bearer->urr->vol_threshold.total_volume = 1024*1024*100;
+        bearer->urr = urr;
+        
     }
+    urr->meas_method = OGS_PFCP_MEASUREMENT_METHOD_VOLUME;
+    urr->rep_triggers.volume_threshold = 1;
+    urr->vol_threshold.tovol = 1;
+    urr->vol_threshold.total_volume = 1024*1024*100;
     /************srag&abdallah*********/
     if(smf_self()->use_radius == true )
     {
