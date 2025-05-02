@@ -2409,7 +2409,9 @@ smf_bearer_t *smf_bearer_add(smf_sess_t *sess)
         urr->meas_method = OGS_PFCP_MEASUREMENT_METHOD_VOLUME;
         urr->rep_triggers.volume_threshold = 1;
         urr->vol_threshold.tovol = 1;
-        urr->vol_threshold.total_volume = 1024*1024*100;
+        urr->vol_threshold.total_volume = 2048;
+        urr->vol_threshold.uplink_volume = 1024;
+        urr->vol_threshold.downlink_volume = 1024;
     }
 
     /* PDR */
