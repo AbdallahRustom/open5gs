@@ -140,6 +140,7 @@ uint32_t smf_gy_handle_cca_initial_request(
     bearer->urr->meas_method = OGS_PFCP_MEASUREMENT_METHOD_VOLUME;
     bearer->urr->rep_triggers.volume_threshold = 1;
     bearer->urr->vol_threshold.tovol = 1;
+    bearer->urr->vol_threshold.total_volume = 1024*1024*100;
     
     /************srag&abdallah*********/
     if(smf_self()->use_radius == true )
