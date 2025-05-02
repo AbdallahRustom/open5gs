@@ -300,7 +300,7 @@ uint32_t smf_gy_handle_cca_initial_request(
     urr_update_volume(sess, bearer->urr, gy_message);
 
     /* Associate acconting URR each direction PDR: */
-    // ogs_pfcp_pdr_associate_urr(bearer->ul_pdr, bearer->urr);
+    ogs_pfcp_pdr_associate_urr(bearer->ul_pdr, bearer->urr);
     ogs_pfcp_pdr_associate_urr(bearer->dl_pdr, bearer->urr);
 
 
