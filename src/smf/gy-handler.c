@@ -171,16 +171,16 @@ uint32_t smf_gy_handle_cca_initial_request(
             &dl_far->outer_header_creation_len));
     dl_far->outer_header_creation.teid = bearer->sgw_s5u_teid;
 
-    // ogs_pfcp_far_t *new_far = NULL;
+    ogs_pfcp_far_t *new_far = NULL;
     
-    // new_far= ogs_pfcp_far_add(&sess->pfcp);
-    // ogs_assert(new_far);
-    // new_far->apply_action= OGS_PFCP_APPLY_ACTION_FORW;
+    new_far= ogs_pfcp_far_add(&sess->pfcp);
+    ogs_assert(new_far);
+    new_far->apply_action= OGS_PFCP_APPLY_ACTION_FORW;
   
 /*FAR END*/
 
-    // ogs_pfcp_pdr_associate_far(bearer->dl_pdr,new_far);
-    // ogs_pfcp_pdr_associate_far(bearer->ul_pdr,new_far);
+    ogs_pfcp_pdr_associate_far(bearer->dl_pdr,new_far);
+    ogs_pfcp_pdr_associate_far(bearer->ul_pdr,new_far);
 
        ogs_assert(sess->pfcp_node);
        if (sess->pfcp_node->up_function_features.ftup){
@@ -213,8 +213,8 @@ uint32_t smf_gy_handle_cca_initial_request(
     urr_update_volume(sess, bearer->urr, gy_message);
 
     /* Associate acconting URR each direction PDR: */
-    // ogs_pfcp_pdr_associate_urr(bearer->ul_pdr, bearer->urr);
-    // ogs_pfcp_pdr_associate_urr(bearer->dl_pdr, bearer->urr);
+    ogs_pfcp_pdr_associate_urr(bearer->ul_pdr, bearer->urr);
+    ogs_pfcp_pdr_associate_urr(bearer->dl_pdr, bearer->urr);
 
 
     return ER_DIAMETER_SUCCESS;
