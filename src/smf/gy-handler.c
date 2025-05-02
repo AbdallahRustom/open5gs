@@ -135,14 +135,14 @@ uint32_t smf_gy_handle_cca_initial_request(
     ogs_assert(bearer);
 
     ogs_pfcp_urr_t *urr = NULL;
-    urr = bearer->urr;
+    // urr = bearer->urr;
 
-    if (!urr){
+    // if (!urr){
         urr = ogs_pfcp_urr_add(&sess->pfcp);
         ogs_assert(urr);
         // bearer->urr = urr;
         
-    }
+    // }
     urr->meas_method = OGS_PFCP_MEASUREMENT_METHOD_VOLUME;
     urr->rep_triggers.volume_threshold = 1;
     urr->vol_threshold.tovol = 1;
