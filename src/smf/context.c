@@ -2399,6 +2399,19 @@ smf_bearer_t *smf_bearer_add(smf_sess_t *sess)
     //     urr->meas_info.istm = 1;
     // }
 
+    ogs_pfcp_urr_t *urr = NULL;
+
+    /* If usage logging enabled create a new URR */
+    if (ogs_pfcp_self()->usageLoggerState.enabled) {
+        urr = ogs_pfcp_urr_add(&sess->pfcp);
+        ogs_assert(urr);
+
+        urr->meas_method = OGS_PFCP_MEASUREMENT_METHOD_VOLUME;
+        urr->rep_triggers.volume_threshold = 1;
+        urr->vol_threshold.tovol = 1;
+        urr->vol_threshold.total_volume = 1024*1024*100;
+    }
+
     /* PDR */
     dl_pdr = ogs_pfcp_pdr_add(&sess->pfcp);
     ogs_assert(dl_pdr);
@@ -2408,9 +2421,9 @@ smf_bearer_t *smf_bearer_add(smf_sess_t *sess)
     dl_pdr->apn = ogs_strdup(sess->session.name);
     ogs_assert(dl_pdr->apn);
 
-    //  if (ogs_pfcp_self()->usageLoggerState.enabled) {
-    //     ogs_pfcp_pdr_associate_urr(dl_pdr, urr);
-    // }
+     if (ogs_pfcp_self()->usageLoggerState.enabled) {
+        ogs_pfcp_pdr_associate_urr(dl_pdr, urr);
+    }
 
     dl_pdr->src_if = OGS_PFCP_INTERFACE_CORE;
 
@@ -2422,9 +2435,9 @@ smf_bearer_t *smf_bearer_add(smf_sess_t *sess)
     ul_pdr->apn = ogs_strdup(sess->session.name);
     ogs_assert(ul_pdr->apn);
 
-    //  if (ogs_pfcp_self()->usageLoggerState.enabled) {
-    //     ogs_pfcp_pdr_associate_urr(ul_pdr, urr);
-    // }
+     if (ogs_pfcp_self()->usageLoggerState.enabled) {
+        ogs_pfcp_pdr_associate_urr(ul_pdr, urr);
+    }
 
     ul_pdr->src_if = OGS_PFCP_INTERFACE_ACCESS;
 
